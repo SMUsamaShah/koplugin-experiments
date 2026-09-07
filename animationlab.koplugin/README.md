@@ -2,23 +2,33 @@
 
 Experimental KOReader plugin for testing fast framebuffer animation techniques on E-Ink devices, especially the Kindle Paperwhite 4.
 
-## Install
+## Use
 
-Copy this whole folder to:
+Open a book, then open **E-Ink Animation Lab**.
 
-`koreader/plugins/animationlab.koplugin/`
+Start with:
 
-Then restart KOReader and open a book. The plugin appears as **E-Ink Animation Lab** in the main menu's tools/plugins area.
+- Refresh mode: **Fast / DU**
+- Frames: **10**
+- Frame delay: **8 ms**
+- Wait for each refresh: **off**
 
-## Suggested PW4 settings
+Then try:
 
-- Refresh mode: Fast / DU
-- Frames: 10
-- Frame delay: 8 ms
-- Wait for each refresh: off
+- **Turn ACTUAL next book page → Plain wipe**
+- **Turn ACTUAL next book page → Wipe + moving shadow**
+- **Turn ACTUAL next book page → Curved edge + shadow**
 
-Run **Moving box benchmark**, then the three **Page-turn previews**, then **Compare refresh modes**.
+These commands now turn the real book page you are reading. The plugin captures the currently visible framebuffer, advances KOReader's real page/view state, renders that destination ReaderUI into an off-screen buffer, and animates between the two.
 
-`Wait for each refresh` should stay off for judging smoothness and be enabled only when you want serialized timing. The comparison test handles synchronization itself.
+Use **Turn ACTUAL previous book page** to go back and compare another animation on the same pages.
 
-The tests restore the original framebuffer after each run and do not modify the document.
+The old generated-line tests remain under **Synthetic diagnostics**.
+
+## Other tests
+
+- **Moving box benchmark**: small-region animation performance.
+- **Compare refresh modes**: synchronized A2, Fast/DU, UI and Partial timings.
+- **Synthetic diagnostics**: controlled fake-page tests retained for debugging.
+
+`Wait for each refresh` should stay off when judging smoothness. Turn it on only when you want serialized refresh timing; the comparison test handles that automatically.
