@@ -132,6 +132,7 @@ function MotionLab:init()
     self.frames = tonumber(G_reader_settings:readSetting("einkmotionlab_frames")) or 24
     self.delay_ms = tonumber(G_reader_settings:readSetting("einkmotionlab_delay_ms")) or 8
     self.block_size = tonumber(G_reader_settings:readSetting("einkmotionlab_block_size")) or 4
+    self.bayer_block_size = tonumber(G_reader_settings:readSetting("einkmotionlab_bayer_block_size")) or 2
     self.raw_ok = has_mxcfb and Device:isKindle() and Device:isRex()
         and Screen.fd ~= nil and Screen._get_next_marker ~= nil
     self.results_path = DataStorage:getSettingsDir() .. "/einkmotionlab-last.txt"
@@ -161,6 +162,11 @@ end
 function MotionLab:setBlockSize(v)
     self.block_size = v
     G_reader_settings:saveSetting("einkmotionlab_block_size", v)
+end
+
+function MotionLab:setBayerBlockSize(v)
+    self.bayer_block_size = v
+    G_reader_settings:saveSetting("einkmotionlab_bayer_block_size", v)
 end
 
 function MotionLab:runSafely(label, fn)
@@ -421,14 +427,14 @@ function MotionLab:getVisualTests()
         { name = "KOReader A2 (gray input, no dither)", api = "a2" },
         { name = "KOReader A2 + HW ordered dither", api = "a2", dither = true },
         { name = "KOReader A2 + SW Bayer binary dither", api = "a2",
-            render_mode = "ordered_binary", block_size = 2 },
+            render_mode = "ordered_binary", block_size = self.bayer_block_size },
         { name = "KOReader A2 + SW stochastic binary dither", api = "a2",
             render_mode = "stochastic_binary", block_size = 2 },
 
         { name = "KOReader DU (gray input, no dither)", api = "fast" },
         { name = "KOReader DU + HW ordered dither", api = "fast", dither = true },
         { name = "KOReader DU + SW Bayer binary dither", api = "fast",
-            render_mode = "ordered_binary", block_size = 2 },
+            render_mode = "ordered_binary", block_size = self.bayer_block_size },
 
         { name = "KOReader UI/AUTO", api = "ui" },
     }
@@ -936,6 +942,16 @@ function MotionLab:addToMainMenu(menu_items)
                         function() self:setPatchSize(128) end),
                     radioItem("192 x 192", function() return self.patch_size == 192 end,
                         function() self:setPatchSize(192) end),
+                    radioItem("256 x 256", function() return self.patch_size == 256 end,
+                        function() self:setPatchSize(256) end),
+                    radioItem("384 x 384", function() return self.patch_size == 384 end,
+                        function() self:setPatchSize(384) end),
+                    radioItem("512 x 512", function() return self.patch_size == 512 end,
+                        function() self:setPatchSize(512) end),
+                    radioItem("768 x 768", function() return self.patch_size == 768 end,
+                        function() self:setPatchSize(768) end),
+                    radioItem("1024 x 1024", function() return self.patch_size == 1024 end,
+                        function() self:setPatchSize(1024) end),
                 },
             },
             {
@@ -949,6 +965,16 @@ function MotionLab:addToMainMenu(menu_items)
                         function() self:setFrames(36) end),
                     radioItem("48", function() return self.frames == 48 end,
                         function() self:setFrames(48) end),
+                    radioItem("60", function() return self.frames == 60 end,
+                        function() self:setFrames(60) end),
+                    radioItem("120", function() return self.frames == 120 end,
+                        function() self:setFrames(120) end),
+                    radioItem("240", function() return self.frames == 240 end,
+                        function() self:setFrames(240) end),
+                    radioItem("480", function() return self.frames == 480 end,
+                        function() self:setFrames(480) end),
+                    radioItem("960", function() return self.frames == 960 end,
+                        function() self:setFrames(960) end),
                 },
             },
             {
@@ -964,6 +990,19 @@ function MotionLab:addToMainMenu(menu_items)
                         function() self:setDelay(16) end),
                     radioItem("25 ms", function() return self.delay_ms == 25 end,
                         function() self:setDelay(25) end),
+                },
+            },
+            {
+                text = _("SW Bayer block size"),
+                sub_item_table = {
+                    radioItem("2 px (best-looking, most CPU)", function() return self.bayer_block_size == 2 end,
+                        function() self:setBayerBlockSize(2) end),
+                    radioItem("4 px (faster for large patches)", function() return self.bayer_block_size == 4 end,
+                        function() self:setBayerBlockSize(4) end),
+                    radioItem("8 px (stress large display regions)", function() return self.bayer_block_size == 8 end,
+                        function() self:setBayerBlockSize(8) end),
+                    radioItem("16 px (minimize Lua render cost)", function() return self.bayer_block_size == 16 end,
+                        function() self:setBayerBlockSize(16) end),
                 },
             },
             {
