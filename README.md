@@ -2,6 +2,16 @@
 
 Small experimental KOReader plugins and rendering tests. These are prototypes, not production plugins.
 
+## E-Ink Motion / Grayscale Lab
+
+Location: `einkmotionlab.koplugin/`
+
+This experiment targets the **Kindle Paperwhite 4 / Rex** display path. It animates a small Perlin-like grayscale field and runs the same motion through KOReader A2/DU/AUTO/Partial modes, hardware and software dithering, direct Rex waveform ioctls, queued versus synchronized updates, several patch sizes, and an experimental GC16 pause/resume probe.
+
+Start with **Run EVERYTHING**. It saves timings incrementally to `einkmotionlab-last.txt` in KOReader's settings directory. The low-level pause probe runs last.
+
+See `einkmotionlab.koplugin/README.md` for the full test matrix and warning about the raw Rex experiments.
+
 ## E-Ink Animation Lab
 
 Location: `animationlab.koplugin/`
