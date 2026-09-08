@@ -12,6 +12,8 @@ Open a book, then open:
 
 **E-Ink Motion / Grayscale Lab**
 
+For quicker repeated testing, the plugin now appears directly in the main **Tools** menu instead of **More tools**. It also registers two KOReader actions: **E-Ink Motion Lab: run everything** and **E-Ink Motion Lab: repeat last individual test**. Assign either action to a gesture or put it in a Quick Menu for one-gesture access. Individual tests keep the menu open and the last selected test is remembered.
+
 The plugin is document-only so the experiment runs over a normal book page and restores the tested area afterwards.
 
 ## Start here

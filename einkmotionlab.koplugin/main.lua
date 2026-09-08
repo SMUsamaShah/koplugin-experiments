@@ -8,6 +8,7 @@ tries several refresh paths, including direct MXCFB_SEND_UPDATE_REX calls.
 
 local Blitbuffer = require("ffi/blitbuffer")
 local Device = require("device")
+local Dispatcher = require("dispatcher")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -111,6 +112,21 @@ local function radioItem(text, checked, callback)
     }
 end
 
+function MotionLab:onDispatcherRegisterActions()
+    Dispatcher:registerAction("einkmotionlab_run_everything", {
+        category = "none",
+        event = "EInkMotionLabRunEverything",
+        title = _("E-Ink Motion Lab: run everything"),
+        reader = true,
+    })
+    Dispatcher:registerAction("einkmotionlab_repeat_last", {
+        category = "none",
+        event = "EInkMotionLabRepeatLast",
+        title = _("E-Ink Motion Lab: repeat last individual test"),
+        reader = true,
+    })
+end
+
 function MotionLab:init()
     self.patch_size = tonumber(G_reader_settings:readSetting("einkmotionlab_patch_size")) or 96
     self.frames = tonumber(G_reader_settings:readSetting("einkmotionlab_frames")) or 24
@@ -119,6 +135,7 @@ function MotionLab:init()
     self.raw_ok = has_mxcfb and Device:isKindle() and Device:isRex()
         and Screen.fd ~= nil and Screen._get_next_marker ~= nil
     self.results_path = DataStorage:getSettingsDir() .. "/einkmotionlab-last.txt"
+    self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
 end
 
@@ -800,13 +817,44 @@ function MotionLab:capabilityReport()
     return table.concat(lines, "\n")
 end
 
+function MotionLab:repeatLastIndividualTest()
+    local wanted = G_reader_settings:readSetting("einkmotionlab_last_test")
+    if not wanted then
+        return "No individual test has been run yet. Run one once from the Motion Lab menu."
+    end
+
+    for _, test in ipairs(self:getVisualTests()) do
+        if test.name == wanted then
+            local snapshot = Screen.bb:copy()
+            local x, y, size = self:getPatchRect(self.patch_size)
+            local result = self:runVisualTest(test, size, test.frames or self.frames)
+            self:restorePatch(snapshot, x, y, size)
+            snapshot:free()
+            UIManager:setDirty(self.ui, "ui")
+            return "Repeated: " .. result
+        end
+    end
+
+    return "The previously selected test is no longer available: " .. tostring(wanted)
+end
+
+function MotionLab:onEInkMotionLabRunEverything()
+    self:runSafely("everything", function() return self:runEverything() end)
+end
+
+function MotionLab:onEInkMotionLabRepeatLast()
+    self:runSafely("repeat last test", function() return self:repeatLastIndividualTest() end)
+end
+
 function MotionLab:individualItems()
     local items = {}
     for _, spec in ipairs(self:getVisualTests()) do
         local test = spec
         table.insert(items, {
             text = test.name,
+            keep_menu_open = true,
             callback = function()
+                G_reader_settings:saveSetting("einkmotionlab_last_test", test.name)
                 self:runSafely(test.name, function()
                     local snapshot = Screen.bb:copy()
                     local x, y, size = self:getPatchRect(self.patch_size)
@@ -825,12 +873,19 @@ end
 function MotionLab:addToMainMenu(menu_items)
     menu_items.einkmotionlab = {
         text = _("E-Ink Motion / Grayscale Lab"),
-        sorting_hint = "more_tools",
+        sorting_hint = "tools",
         sub_item_table = {
             {
                 text = _("Run EVERYTHING (recommended first test)"),
                 callback = function()
                     self:runSafely("everything", function() return self:runEverything() end)
+                end,
+            },
+            {
+                text = _("Repeat last individual test"),
+                callback = function()
+                    self:runSafely("repeat last test",
+                        function() return self:repeatLastIndividualTest() end)
                 end,
             },
             {
