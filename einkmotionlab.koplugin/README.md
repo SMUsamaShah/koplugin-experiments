@@ -1,0 +1,128 @@
+# E-Ink Motion / Grayscale Lab
+
+Experimental KOReader plugin for probing how smoothly a small region can animate on a Kindle Paperwhite 4 (Rex).
+
+It draws a centered **Perlin-like moving grayscale field** and runs the same visual through different waveform, dithering, queuing, and region-size strategies. The goal is not accurate grayscale reproduction; it is to find refresh paths that *look* fluid for organic grayscale motion.
+
+## Install
+
+Copy `einkmotionlab.koplugin` into KOReader's `plugins` directory and restart KOReader.
+
+Open a book, then open:
+
+**E-Ink Motion / Grayscale Lab**
+
+The plugin is document-only so the experiment runs over a normal book page and restores the tested area afterwards.
+
+## Start here
+
+Use:
+
+**Run EVERYTHING (recommended first test)**
+
+For the first comparison, use normal (non-inverted) day mode so the raw Rex tests and KOReader-managed tests are easier to compare.
+
+Default settings are:
+
+- patch: 96 x 96 px
+- 24 frames per normal visual test
+- 8 ms requested delay between submissions
+- 4 px grayscale render blocks
+- software dither tests use finer 2 px blocks
+
+The suite saves results incrementally to `einkmotionlab-last.txt` in KOReader's settings directory. This is intentional: the most experimental pause test runs last, so earlier timing results should already be on disk even if that probe misbehaves.
+
+A phone video of the patch during the run is much more useful than timings alone, because the interesting question is which mode *looks* smooth.
+
+## What it tests
+
+### KOReader refresh paths
+
+- A2 with grayscale input
+- A2 + hardware ordered dithering
+- A2 + software Bayer black/white dithering
+- A2 + software stochastic black/white dithering
+- DU/Fast with grayscale input
+- DU + hardware ordered dithering
+- DU + software Bayer black/white dithering
+- UI/AUTO
+- synchronized Partial/REAGL
+
+The software-dither modes deliberately use only black and white physical pixels. At 300 dpi the fine pattern can visually average into moving gray without asking the panel for accurate intermediate gray states.
+
+### Direct PW4/Rex refresh paths
+
+On a Kindle Rex device the plugin also bypasses KOReader's normal refresh scheduling and submits `MXCFB_SEND_UPDATE_REX` directly.
+
+It compares:
+
+- AUTO queued
+- AUTO + ordered dithering
+- A2 + ordered dithering
+- A2 0 ms burst submission
+- A2 + Floyd-Steinberg dithering
+- A2 + Atkinson dithering
+- DU + ordered dithering
+- DU 0 ms burst submission
+- GC16 queued
+- GC16 serialized
+- GL16 queued
+- GLR16 partial queued
+- GLD16 partial + ordered dithering / REGAL flag
+
+The raw tests are intentionally aggressive. They are experiments, not recommended rendering policy for normal KOReader use.
+
+### Region-size sweep
+
+The plugin repeats selected animations at:
+
+- 32 x 32
+- 64 x 64
+- 96 x 96
+- 128 x 128
+- 192 x 192
+
+The timing report includes both wall time and Lua-side noise-render time, so CPU rendering cost can be separated somewhat from E-Ink refresh behavior.
+
+### PW4 capability probe
+
+The plugin asks the framebuffer driver for:
+
+- device / Rex detection
+- framebuffer bits per pixel
+- waveform type (4-bit or 5-bit if reported)
+- EPDC temperature
+
+### GC16 pause/resume probe
+
+There are two experimental tests:
+
+- **Probe GC16 pause/resume ioctl (80 ms)**
+- **GC16 pause timing sweep (20..140 ms)**
+
+A trial starts a white-to-black GC16 update, waits for the selected delay, calls `MXCFB_SET_PAUSE`, holds, then tries `MXCFB_SET_RESUME`.
+
+The Kindle public framebuffer header exposes these ioctls but does not document enough behavior to assume they work as desired on Rex. Treat this as a probe.
+
+If the patch visibly holds at an intermediate shade during the pause period, that is the interesting result: it suggests we can investigate controlling waveform progress rather than only requesting final gray values.
+
+## Important warning
+
+The normal KOReader tests are straightforward framebuffer experiments. The **raw Rex** and especially **pause/resume** tests deliberately bypass some of KOReader's safety/scheduling behavior.
+
+A failed pause/resume experiment could leave the display path temporarily stuck or visually dirty. The plugin tries to recover and restore the page, but be prepared to restart KOReader (or reboot the Kindle if necessary).
+
+`Run EVERYTHING` performs the pause probe **last**.
+
+## What to send back after testing
+
+The most useful data is:
+
+1. a phone video of **Run EVERYTHING**;
+2. `einkmotionlab-last.txt`;
+3. whether any mode looked genuinely fluid;
+4. whether the 32/64/128 px tests differed noticeably;
+5. whether the GC16 pause test visibly froze on an intermediate shade;
+6. any KOReader crash log if a raw mode fails.
+
+Once we know which path is promising, the plugin can be narrowed into a faster continuous animation test instead of spending time cycling through diagnostics.
