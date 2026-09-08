@@ -13,11 +13,10 @@ if ok_ffi then
             return C[name]
         end)
         if not exists then
-            -- An enum constant is enough for LuaJIT FFI to expose ffi.C.NAME.
-            -- Declare one at a time so a future KOReader build that already
-            -- provides some of these cannot make the whole compatibility shim
-            -- fail because of a duplicate declaration.
-            pcall(ffi.cdef, string.format("enum { %s = %u };", name, value))
+            -- Match KOReader's generated FFI style. `unsigned` matters for
+            -- ioctl values whose high bit is set (e.g. 0x80044639).
+            pcall(ffi.cdef, string.format(
+                "static const unsigned %s = %u;", name, value))
         end
     end
 
@@ -38,6 +37,6 @@ local _ = require("gettext")
 return {
     name = "einkmotionlab",
     fullname = _("E-Ink Motion / Grayscale Lab"),
-    version = "0.1.1",
+    version = "0.1.2",
     description = _([[Animate a small Perlin-like grayscale field and compare KOReader and raw Kindle Rex E-Ink refresh paths, dithering, region sizes, and experimental GC16 pause/resume behavior.]]),
 }
