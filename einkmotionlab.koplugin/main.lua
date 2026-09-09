@@ -220,9 +220,9 @@ function MotionLab:readSystemState()
 end
 
 function MotionLab:readTelemetryState()
-    -- Keep in-animation probes deliberately tiny: one cached CPU sysfs read
-    -- and one cached temperature read. Full system scans happen only before
-    -- and after the timed animation.
+    -- During animation, sample CPU frequency only. Temperature changes much
+    -- more slowly and is captured by the full system snapshots immediately
+    -- before and after the timed animation, avoiding unnecessary sysfs reads.
     local freq_raw
     if self._telemetry_freq_path then
         freq_raw = readTextFile(self._telemetry_freq_path)
@@ -233,28 +233,14 @@ function MotionLab:readTelemetryState()
         })
     end
 
-    local temp_raw
-    if self._telemetry_temp_path then
-        temp_raw = readTextFile(self._telemetry_temp_path)
-    else
-        temp_raw = firstReadable({
-            "/sys/class/thermal/thermal_zone0/temp",
-            "/sys/class/hwmon/hwmon0/temp1_input",
-        })
-    end
-    local temp = tonumber(temp_raw)
-    if temp and math.abs(temp) > 1000 then temp = temp / 1000 end
-
     return {
         freq_khz = tonumber(freq_raw),
-        temp_c = temp,
     }
 end
 
 function MotionLab:telemetryStateText(state)
     state = state or {}
-    return string.format("cpu=%s temp=%s",
-        formatFreq(state.freq_khz), formatTemp(state.temp_c))
+    return string.format("cpu=%s", formatFreq(state.freq_khz))
 end
 
 function MotionLab:systemStateText(state)
@@ -283,7 +269,7 @@ function MotionLab:currentSettingsLines(spec, actual_size, run_frames, scheduler
     local render_block = self:isBayerMotionTest(spec) and self.bayer_block_size
         or (spec.block_size or self.block_size)
     return {
-        "plugin_version=0.1.8",
+        "plugin_version=0.1.9",
         "configured_patch_size=" .. tostring(self.patch_size),
         "actual_patch_size=" .. tostring(actual_size or self.patch_size),
         "configured_frames=" .. tostring(self.frames),
@@ -336,7 +322,7 @@ function MotionLab:appendRunLog(spec, actual_size, run_frames, scheduler,
     lines[#lines + 1] = "skipped_logical_frames=" .. tostring(skipped or 0)
     lines[#lines + 1] = "-- SYSTEM START --"
     lines[#lines + 1] = self:systemStateText(start_state)
-    lines[#lines + 1] = "-- SAMPLES (first, every 10 submitted frames, last) --"
+    lines[#lines + 1] = "-- CPU FREQUENCY SAMPLES (first, every 10 submitted frames, last) --"
     if telemetry and #telemetry > 0 then
         for _, sample in ipairs(telemetry) do
             local r = sample.row or {}
