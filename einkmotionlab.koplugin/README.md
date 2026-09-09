@@ -96,41 +96,76 @@ The plugin is document-only so the experiment runs over a normal book page and r
 
 ## Start here
 
-### GIF playback (0.1.11)
+### GIF playback (0.1.12)
 
 Open **Tools → E-Ink Motion / Grayscale Lab → Run GIF test**:
 
 - **Play demo GIF** starts the included moving-dot and grayscale-wave animation.
 - **Choose and play GIF…** opens a file picker; tap a GIF on your Kindle.
 - **Replay last GIF** repeats the last successfully loaded file.
+- **Play last GIF with…** selects a mode and immediately replays the last GIF.
 
 The image fits inside **Patch size** with its aspect ratio preserved. Tap
 anywhere (or press Back) to stop and restore the page. There is a preparation
 pause before playback: all frames are decoded, composited, scaled and converted
 once, so playback only copies cached frames and requests refreshes.
 
-**GIF refresh mode** offers A2 or DU with software Bayer black/white dithering,
-or UI/AUTO with grayscale. The Bayer texture is 1 px; noise-render block-size
-settings do not affect GIFs. Scaling uses nearest-neighbour sampling.
+**GIF refresh mode** now includes every mode from **Run one test**, using the
+same refresh API, waveform and hardware-dither parameters. On PW4/Rex there are
+**22 modes: the 14 noise-test modes plus eight additional comparisons**.
+
+| Group | Modes |
+| --- | --- |
+| KOReader paths from noise tests | A2 gray, A2 SW Bayer, A2 SW stochastic; DU gray, DU SW Bayer; UI/AUTO |
+| Raw Rex paths from noise tests | AUTO gray/ordered; A2 ordered/Floyd–Steinberg/Atkinson; DU ordered; A2 and DU ordered burst variants |
+| Additional software comparisons | DU SW stochastic; A2/DU SW Floyd–Steinberg; A2/DU SW Atkinson; A2/DU plain B/W threshold |
+| Additional grayscale reference | Raw GC16 synchronized |
+
+Raw modes appear only when the existing Rex capability check passes. Other
+devices retain the noise test's synchronized Partial fallback and the software
+comparisons. Existing saved A2/Bayer, DU/Bayer and AUTO/gray selections migrate
+automatically.
+
+All **SW** conversions are prepared and cached before playback. Stochastic
+dithering uses a fixed spatial mask, so the mask does not change between frames.
+Software error diffusion is recomputed per frame and may produce changing dot
+patterns as image content moves; compare it with Bayer for temporal stability.
+Hardware-dither modes receive grayscale frames and let the driver convert them.
+GIF software dithering works at 1 px; noise block-size settings do not apply.
+Scaling uses nearest-neighbour sampling.
 
 **GIF timing** uses the file's individual frame delays by default, or the
 existing **Fixed-clock target FPS** setting. Missing/zero delays use 100 ms;
 nonzero delays below 20 ms use 20 ms. **GIF repetitions** selects 1, 3 (default),
 or 10 plays, overriding the file's loop flag.
 
-GIF playback always combines clock pacing with the existing **Bounded queue
-depth** limit, checked before copying/submitting another frame. Obsolete frames
-are skipped if playback falls behind. The noise scheduler and extra frame-delay
-settings do not apply. Submission timing is not a measurement of visible FPS.
+Paced GIF modes combine clock timing with the existing **Bounded queue depth**
+limit, checked before copying/submitting another frame, and skip obsolete frames
+if playback falls behind. The noise scheduler and extra frame-delay settings do
+not apply. Submission timing is not a measurement of visible FPS.
 
-Preparation time, cache size, submitted/skipped frames and early/mid/late
-timings append to `einkmotionlab.log`. Transparency is composited on white;
+The inherited **0 ms burst** modes submit every GIF frame as quickly as the
+bounded queue allows, overriding GIF/FPS timing. A 1 ms yield between submissions
+keeps tap-to-stop responsive; these are not unbounded hardware queue floods.
+They play the chosen number of GIF repetitions rather than the noise tests'
+fixed 24-frame burst length. **Synchronized** modes wait for each completed
+update and preserve every source frame, slowing playback when necessary rather
+than skipping frames; the selected timing sets a minimum hold time.
+
+Preparation time, cache size, exact mode/API/waveform/dither settings,
+submitted/skipped frames and early/mid/late timings append to
+`einkmotionlab.log`. Transparency is composited on white;
 partial frames, local palettes and background/previous-frame disposal are
 handled sequentially. The original noise tests remain available.
 
 Files are limited to 8 MiB, 512 frames, a 4-megapixel source canvas, 32 MiB of
 decoded indexed pixels and a 32 MiB playback cache. If the cache is too large,
 reduce **Patch size** or choose a shorter GIF.
+
+Developer regression checks: install Python's `lupa` package and run
+`python tests/test_gif_modes.py` from the repository root. These check catalog
+parity, refresh routing, software conversion, timing and cleanup without a
+Kindle; optical refresh behavior still requires device testing.
 
 ### Noise and refresh experiments
 

@@ -3,11 +3,12 @@
 local ffi = require("ffi")
 local bit = require("bit")
 local BB = require("ffi/blitbuffer")
+local module_dir = debug.getinfo(1, "S").source:match("^@(.*/)") or "./"
+local Dither = dofile(module_dir .. "gifdither.lua")
 local Loader = {}
 local MAX_FILE = 8 * 1024 * 1024
 local MAX_RASTER = 32 * 1024 * 1024
 local MAX_CACHE = 32 * 1024 * 1024
-local BAYER = {0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5}
 
 -- Bound allocations before DGifSlurp decompresses all indexed frames.
 function Loader.inspect(path)
@@ -149,13 +150,10 @@ function Loader.load(path, target_size, mode)
                 local sy = math.min(h - 1, math.floor(y * h / height))
                 for x = 0, width - 1 do
                     local v = tonumber(canvas[sy * w + xs[x]])
-                    if mode ~= "gray" then
-                        local threshold = (BAYER[(y % 4) * 4 + x % 4 + 1] + 0.5) * 16
-                        v = v > threshold and 255 or 0
-                    end
                     dest[y * bb.stride + x] = v
                 end
             end
+            Dither.apply(bb, mode)
             -- Disposal applies AFTER displaying this frame, before the next.
             if disposal == 2 then
                 for y = top, top + fh - 1 do ffi.fill(canvas + y * w + left, fw, background) end

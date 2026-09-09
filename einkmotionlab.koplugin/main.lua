@@ -282,7 +282,7 @@ function MotionLab:currentSettingsLines(spec, actual_size, run_frames, scheduler
     local render_block = self:isBayerMotionTest(spec) and self.bayer_block_size
         or (spec.block_size or self.block_size)
     return {
-        "plugin_version=0.1.11",
+        "plugin_version=0.1.12",
         "noise_hash=bounded_bit_hash",
         "configured_patch_size=" .. tostring(self.patch_size),
         "actual_patch_size=" .. tostring(actual_size or self.patch_size),
@@ -1311,6 +1311,40 @@ function MotionLab:setGifSetting(key, value)
     G_reader_settings:saveSetting("einkmotionlab_" .. key, value)
 end
 
+function MotionLab:getGifModes()
+    if not self._gif_mode_catalog then
+        self._gif_modes_library = dofile(plugin_dir .. "gifmodes.lua")
+        self._gif_mode_catalog = self._gif_modes_library.build(self:getVisualTests(), self.raw_ok)
+    end
+    return self._gif_mode_catalog
+end
+
+function MotionLab:getGifMode()
+    local modes = self:getGifModes()
+    return self._gif_modes_library.find(modes, self.gif_mode)
+end
+
+function MotionLab:gifModeItems(play_now)
+    local items = {}
+    for _, mode in ipairs(self:getGifModes()) do
+        local selected = mode
+        local callback = function()
+            self:setGifSetting("gif_mode", selected.id)
+            if play_now then
+                local path = G_reader_settings:readSetting("einkmotionlab_last_gif")
+                if path then self:playGif(path) end
+            end
+        end
+        if play_now then
+            items[#items + 1] = { text = selected.name, callback = callback }
+        else
+            items[#items + 1] = radioItem(selected.name,
+                function() return self:getGifMode().id == selected.id end, callback)
+        end
+    end
+    return items
+end
+
 function MotionLab:playGif(path)
     if self._gif_loading or self._gif_player then return end
     self._gif_loading, self._gif_abort = true, false
@@ -1318,7 +1352,7 @@ function MotionLab:playGif(path)
     UIManager:show(loading)
     local _, _, size = self:getPatchRect(self.patch_size)
     local options = {
-        path = path, refresh_mode = self.gif_mode, clock_mode = self.gif_clock,
+        path = path, spec = self:getGifMode(), clock_mode = self.gif_clock,
         target_fps = math.max(1, self.target_fps),
         queue_depth = math.max(1, math.min(8, self.queue_depth)), loops = self.gif_loops,
     }
@@ -1330,7 +1364,7 @@ function MotionLab:playGif(path)
         end
         local started = nowSeconds()
         local ok, animation = pcall(function()
-            return dofile(plugin_dir .. "gifloader.lua").load(path, size, options.refresh_mode == "gray" and "gray" or "bayer")
+            return dofile(plugin_dir .. "gifloader.lua").load(path, size, options.spec.render_mode)
         end)
         options.prepare_ms = (nowSeconds() - started) * 1000
         UIManager:close(loading)
@@ -1397,14 +1431,10 @@ function MotionLab:gifItems()
                 local path = G_reader_settings:readSetting("einkmotionlab_last_gif")
                 if path then self:playGif(path) end
             end },
-        { text = _("GIF refresh mode"), sub_item_table = {
-            radioItem("A2 + software Bayer", function() return self.gif_mode == "a2" end,
-                function() self:setGifSetting("gif_mode", "a2") end),
-            radioItem("DU + software Bayer", function() return self.gif_mode == "du" end,
-                function() self:setGifSetting("gif_mode", "du") end),
-            radioItem("UI/AUTO grayscale", function() return self.gif_mode == "gray" end,
-                function() self:setGifSetting("gif_mode", "gray") end),
-        } },
+        { text = _("Play last GIF with…"),
+            enabled_func = function() return G_reader_settings:readSetting("einkmotionlab_last_gif") ~= nil end,
+            sub_item_table = self:gifModeItems(true) },
+        { text = _("GIF refresh mode"), sub_item_table = self:gifModeItems(false) },
         { text = _("GIF timing"), sub_item_table = {
             radioItem("Original GIF frame delays", function() return self.gif_clock == "original" end,
                 function() self:setGifSetting("gif_clock", "original") end),

@@ -6,6 +6,10 @@ local Geom = require("ui/geometry")
 local ffiUtil = require("ffi/util")
 local Screen = Device.screen
 local Player = InputContainer:extend{}
+local API_METHODS = {
+    a2 = "refreshA2", fast = "refreshFast", ui = "refreshUI",
+    partial = "refreshPartial",
+}
 
 local function now()
     local s, us = ffiUtil.gettime()
@@ -13,6 +17,8 @@ local function now()
 end
 
 function Player:init()
+    assert(self.spec, "GIF refresh specification is missing.")
+    if self.spec.burst then self.clock_mode = "burst" end
     self.queue, self.rows = {}, {}
     self.submitted, self.skipped, self.last_logical = 0, 0, 0
     self.ends, self.cycle_time = {}, 0
@@ -45,6 +51,15 @@ function Player:paintTo(bb)
 end
 
 function Player:frameAt(elapsed)
+    if self.spec.burst or self.spec.wait_each then
+        local logical = self.last_logical + 1
+        if logical > #self.ends * self.loops then return nil end
+        local index = (logical - 1) % #self.ends + 1
+        -- Synchronized quality comparisons show every source frame. Respect
+        -- its minimum hold time, but allow playback to slow with the waveform.
+        local delay = self.ends[index] - (self.ends[index - 1] or 0)
+        return index, logical, elapsed + delay
+    end
     if elapsed >= self.cycle_time * self.loops then return nil end
     local cycle = math.floor(elapsed / self.cycle_time)
     local offset = elapsed - cycle * self.cycle_time
@@ -54,6 +69,31 @@ function Player:frameAt(elapsed)
         if offset < self.ends[mid] then hi = mid else lo = mid + 1 end
     end
     return lo, cycle * #self.ends + lo, cycle * self.cycle_time + self.ends[lo]
+end
+
+function Player:submitFrame()
+    local spec = self.spec
+    if spec.api then
+        local method = API_METHODS[spec.api]
+        if not method or not Screen[method] then error("Unsupported GIF refresh API: " .. tostring(spec.api)) end
+        local before = Screen.marker
+        Screen[method](Screen, self.x, self.y, self.animation.width, self.animation.height, spec.dither == true)
+        if Screen.marker and Screen.marker ~= before then return Screen.marker end
+    else
+        local marker, err = self.lab:rawRexUpdate(spec.waveform, self.x, self.y,
+            self.animation.width, self.animation.height, {
+                dither_mode = spec.dither_mode, quant_bit = spec.quant_bit,
+                flags = spec.flags, update_mode = spec.update_mode,
+            })
+        if not marker then error("GIF raw refresh failed: " .. tostring(err)) end
+        return marker
+    end
+end
+
+function Player:scheduleNext(deadline)
+    -- Burst has no GIF delay, but yields to input between submissions.
+    local delay = self.spec.burst and 0.001 or math.max(0.001, self.started + deadline - now())
+    UIManager:scheduleIn(delay, self.tick)
 end
 
 function Player:step()
@@ -79,7 +119,7 @@ function Player:step()
         return self:finish("complete")
     end
     if logical <= self.last_logical then
-        UIManager:scheduleIn(math.max(0.001, self.started + deadline - now()), self.tick)
+        self:scheduleNext(deadline)
         return
     end
     self.skipped = self.skipped + logical - self.last_logical - 1
@@ -87,18 +127,15 @@ function Player:step()
     t0 = now()
     self:paintTo(Screen.bb)
     local render_ms = (now() - t0) * 1000
-    local marker_before = Screen.marker
     t0 = now()
-    if self.refresh_mode == "du" then
-        Screen:refreshFast(self.x, self.y, self.animation.width, self.animation.height, false)
-    elseif self.refresh_mode == "gray" then
-        Screen:refreshUI(self.x, self.y, self.animation.width, self.animation.height, false)
-    else
-        Screen:refreshA2(self.x, self.y, self.animation.width, self.animation.height, false)
-    end
+    local marker = self:submitFrame()
     local refresh_ms = (now() - t0) * 1000
-    if Screen.marker and Screen.marker ~= marker_before then
-        self.queue[#self.queue + 1] = Screen.marker
+    if self.spec.wait_each and marker then
+        t0 = now()
+        if self.lab:waitMarker(marker) == -1 then error("GIF synchronized refresh wait failed.") end
+        wait_ms = wait_ms + (now() - t0) * 1000
+    elseif marker then
+        self.queue[#self.queue + 1] = marker
     elseif Screen.refreshWaitForLast then
         -- Backends without exposed markers use a synchronous fallback.
         t0 = now()
@@ -111,7 +148,7 @@ function Player:step()
         interval_ms = self.previous_started and (frame_started - self.previous_started) * 1000 or 0,
     }
     self.previous_started = frame_started
-    UIManager:scheduleIn(math.max(0.001, self.started + deadline - now()), self.tick)
+    self:scheduleNext(deadline)
 end
 
 function Player:finish(reason, quiet, externally_closed)
@@ -142,13 +179,20 @@ function Player:finish(reason, quiet, externally_closed)
     local lines = {
         "================================================================",
         "GIF RUN " .. os.date("%Y-%m-%d %H:%M:%S"),
-        "plugin_version=0.1.11",
+        "plugin_version=0.1.12",
         "file=" .. (self.path:match("[^/]+$") or self.path),
         "source_frames=" .. #self.ends,
         string.format("size=%dx%d; cache_bytes=%d; prepare_ms=%.1f",
             self.animation.width, self.animation.height, self.animation.cache_bytes, self.prepare_ms),
-        string.format("refresh=%s; clock=%s; target_fps=%s; queue_depth=%d; loops=%d",
-            self.refresh_mode, self.clock_mode, self.target_fps, self.queue_depth, self.loops),
+        "mode_id=" .. self.spec.id,
+        "mode_name=" .. self.spec.name,
+        string.format("api=%s; waveform=%s; hw_dither=%s; dither_mode=%s; quant_bit=%s; render_mode=%s; wait_each=%s",
+            tostring(self.spec.api or "raw"), tostring(self.spec.waveform or "n/a"),
+            tostring(self.spec.dither == true or self.spec.dither_mode ~= nil),
+            tostring(self.spec.dither_mode or "n/a"), tostring(self.spec.quant_bit or "n/a"),
+            tostring(self.spec.render_mode), tostring(self.spec.wait_each == true)),
+        string.format("clock=%s; target_fps=%s; queue_depth=%d; loops=%d",
+            self.clock_mode, self.target_fps, self.queue_depth, self.loops),
         "frames_prepared_before_playback=true; render_ms_measures_cached_blit=true",
         summary,
         self.lab:timingSummary(self.rows),
@@ -174,7 +218,7 @@ function Player.start(lab, animation, options)
         local x, y, size = lab:getPatchRect(lab.patch_size)
         widget = Player:new{
             lab = lab, animation = animation, path = options.path,
-            refresh_mode = options.refresh_mode, clock_mode = options.clock_mode,
+            spec = options.spec, clock_mode = options.clock_mode,
             target_fps = math.max(1, options.target_fps), queue_depth = math.max(1, options.queue_depth),
             loops = options.loops, prepare_ms = options.prepare_ms,
             box_x = x, box_y = y, box_size = size,
