@@ -647,23 +647,6 @@ function MotionLab:getVisualTests()
             dither_mode = C.EPDC_FLAG_USE_DITHERING_ORDERED, quant_bit = 1,
             delay_ms = 0, frames = 24 },
 
-        -- The heavier true-gray waveform tests are intentionally short.
-        { name = "Raw GC16 queued/no waits", waveform = C.WAVEFORM_MODE_GC16,
-            frames = 8 },
-        { name = "Raw GC16 synchronized", waveform = C.WAVEFORM_MODE_GC16,
-            wait_each = true, frames = 6 },
-        { name = "Raw GL16 queued/no waits", waveform = C.WAVEFORM_MODE_ZELDA_GL16,
-            frames = 10 },
-        { name = "Raw GLR16 PARTIAL queued", waveform = C.WAVEFORM_MODE_ZELDA_GLR16,
-            update_mode = C.UPDATE_MODE_PARTIAL, frames = 8 },
-        { name = "Raw GLD16 PARTIAL + ordered", waveform = C.WAVEFORM_MODE_ZELDA_GLD16,
-            update_mode = C.UPDATE_MODE_PARTIAL,
-            dither_mode = C.EPDC_FLAG_USE_DITHERING_ORDERED, quant_bit = 7,
-            flags = C.EPDC_FLAG_USE_ZELDA_REGAL, frames = 8 },
-
-        -- This intentionally goes through KOReader's conservative REAGL path.
-        { name = "KOReader Partial/REAGL synchronized", api = "partial",
-            wait_each = true, frames = 4 },
     }
 
     for _, spec in ipairs(raw) do

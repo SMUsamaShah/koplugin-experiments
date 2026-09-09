@@ -48,7 +48,6 @@ A phone video of the patch during the run is much more useful than timings alone
 - DU + hardware ordered dithering
 - DU + software Bayer black/white dithering
 - UI/AUTO
-- synchronized Partial/REAGL
 
 The software-dither modes deliberately use only black and white physical pixels. At 300 dpi the fine pattern can visually average into moving gray without asking the panel for accurate intermediate gray states.
 
@@ -66,11 +65,6 @@ It compares:
 - A2 + Atkinson dithering
 - DU + ordered dithering
 - DU 0 ms burst submission
-- GC16 queued
-- GC16 serialized
-- GL16 queued
-- GLR16 partial queued
-- GLD16 partial + ordered dithering / REGAL flag
 
 The raw tests are intentionally aggressive. They are experiments, not recommended rendering policy for normal KOReader use.
 
