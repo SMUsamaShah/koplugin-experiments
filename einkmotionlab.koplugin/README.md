@@ -132,3 +132,9 @@ Once we know which path is promising, the plugin can be narrowed into a faster c
 ## Large-patch / long-run stress testing
 
 For the promising software Bayer modes, the menu now supports patch sizes up to **1024 x 1024** and run lengths up to **960 frames**. A separate **SW Bayer block size** control (2/4/8/16 px) lets you trade visual fineness for much lower Lua rendering cost when testing large regions. Start at 2 px for appearance; if large patches become CPU-bound, try 4 or 8 px to isolate E-Ink/EPDC update performance.
+
+## SW Bayer scheduling diagnostics
+
+The A2/DU software-Bayer tests have three scheduling modes: **Free-running**, **Fixed clock** (absolute deadlines and dropped obsolete logical frames), and **Bounded EPDC queue** (caps outstanding updates and waits on the oldest marker). Target FPS and queue depth are configurable.
+
+Every SW Bayer A2/DU run records per-frame render, refresh-call, queue-wait, sleep, interval and lateness timings to `einkmotionlab-frames.tsv`. The result also reports early/middle/late averages so progressive CPU slowdown can be distinguished from EPDC back-pressure.
