@@ -32,7 +32,7 @@ Default settings are:
 - 4 px grayscale render blocks
 - software dither tests use finer 2 px blocks
 
-The suite saves results incrementally to `einkmotionlab-last.txt` in KOReader's settings directory. This is intentional: the most experimental pause test runs last, so earlier timing results should already be on disk even if that probe misbehaves.
+All diagnostics now append to one plain-text history file, `einkmotionlab.log`, in KOReader's settings directory. Every visual test records all current Motion Lab settings, the final timing result, start/end system state, and sparse CPU/temperature telemetry. Suite checkpoints are appended incrementally so earlier data survives even if a later experimental probe misbehaves.
 
 A phone video of the patch during the run is much more useful than timings alone, because the interesting question is which mode *looks* smooth.
 
@@ -113,7 +113,7 @@ A failed pause/resume experiment could leave the display path temporarily stuck 
 The most useful data is:
 
 1. a phone video of **Run EVERYTHING**;
-2. `einkmotionlab-last.txt`;
+2. `einkmotionlab.log`;
 3. whether any mode looked genuinely fluid;
 4. whether the 32/64/128 px tests differed noticeably;
 5. whether the GC16 pause test visibly froze on an intermediate shade;
@@ -129,4 +129,4 @@ For the promising software Bayer modes, the menu now supports patch sizes up to 
 
 The A2/DU software-Bayer tests have three scheduling modes: **Free-running**, **Fixed clock** (absolute deadlines and dropped obsolete logical frames), and **Bounded EPDC queue** (caps outstanding updates and waits on the oldest marker). Target FPS and queue depth are configurable.
 
-Every SW Bayer A2/DU run records per-frame render, refresh-call, queue-wait, sleep, interval and lateness timings to `einkmotionlab-frames.tsv`. The result also reports early/middle/late averages so progressive CPU slowdown can be distinguished from EPDC back-pressure.
+The result dialog still reports the useful early/middle/late render, refresh, wait and interval averages. There is no longer a per-frame TSV. Instead, `einkmotionlab.log` stores one readable block per test with every current setting, the final result, CPU frequency/governor/range, thermal readings, load and available memory at start/end, plus sparse samples at frame 1, every 10 submitted frames, and the final frame. Samples are collected in memory and written only after the animation to avoid disk I/O affecting the test. The SW Bayer block size is also resolved at execution time so changing it immediately affects already-open test menus.
