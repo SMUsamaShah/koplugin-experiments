@@ -96,6 +96,44 @@ The plugin is document-only so the experiment runs over a normal book page and r
 
 ## Start here
 
+### GIF playback (0.1.11)
+
+Open **Tools → E-Ink Motion / Grayscale Lab → Run GIF test**:
+
+- **Play demo GIF** starts the included moving-dot and grayscale-wave animation.
+- **Choose and play GIF…** opens a file picker; tap a GIF on your Kindle.
+- **Replay last GIF** repeats the last successfully loaded file.
+
+The image fits inside **Patch size** with its aspect ratio preserved. Tap
+anywhere (or press Back) to stop and restore the page. There is a preparation
+pause before playback: all frames are decoded, composited, scaled and converted
+once, so playback only copies cached frames and requests refreshes.
+
+**GIF refresh mode** offers A2 or DU with software Bayer black/white dithering,
+or UI/AUTO with grayscale. The Bayer texture is 1 px; noise-render block-size
+settings do not affect GIFs. Scaling uses nearest-neighbour sampling.
+
+**GIF timing** uses the file's individual frame delays by default, or the
+existing **Fixed-clock target FPS** setting. Missing/zero delays use 100 ms;
+nonzero delays below 20 ms use 20 ms. **GIF repetitions** selects 1, 3 (default),
+or 10 plays, overriding the file's loop flag.
+
+GIF playback always combines clock pacing with the existing **Bounded queue
+depth** limit, checked before copying/submitting another frame. Obsolete frames
+are skipped if playback falls behind. The noise scheduler and extra frame-delay
+settings do not apply. Submission timing is not a measurement of visible FPS.
+
+Preparation time, cache size, submitted/skipped frames and early/mid/late
+timings append to `einkmotionlab.log`. Transparency is composited on white;
+partial frames, local palettes and background/previous-frame disposal are
+handled sequentially. The original noise tests remain available.
+
+Files are limited to 8 MiB, 512 frames, a 4-megapixel source canvas, 32 MiB of
+decoded indexed pixels and a 32 MiB playback cache. If the cache is too large,
+reduce **Patch size** or choose a shorter GIF.
+
+### Noise and refresh experiments
+
 Use:
 
 **Run EVERYTHING (recommended first test)**

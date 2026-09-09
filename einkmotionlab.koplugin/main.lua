@@ -18,8 +18,8 @@ local bit = require("bit")
 local ffiUtil = require("ffi/util")
 local logger = require("logger")
 local _ = require("gettext")
-local diagnostic_path = (debug.getinfo(1, "S").source:match("^@(.*/)") or "./")
-    .. "renderdiagnostic.lua"
+local plugin_dir = debug.getinfo(1, "S").source:match("^@(.*/)") or "./"
+local diagnostic_path = plugin_dir .. "renderdiagnostic.lua"
 
 local Screen = Device.screen
 local C = ffi.C
@@ -282,7 +282,7 @@ function MotionLab:currentSettingsLines(spec, actual_size, run_frames, scheduler
     local render_block = self:isBayerMotionTest(spec) and self.bayer_block_size
         or (spec.block_size or self.block_size)
     return {
-        "plugin_version=0.1.10",
+        "plugin_version=0.1.11",
         "noise_hash=bounded_bit_hash",
         "configured_patch_size=" .. tostring(self.patch_size),
         "actual_patch_size=" .. tostring(actual_size or self.patch_size),
@@ -382,6 +382,10 @@ function MotionLab:init()
     self.scheduler_mode = G_reader_settings:readSetting("einkmotionlab_scheduler_mode") or "free"
     self.target_fps = tonumber(G_reader_settings:readSetting("einkmotionlab_target_fps")) or 60
     self.queue_depth = tonumber(G_reader_settings:readSetting("einkmotionlab_queue_depth")) or 4
+    self.gif_mode = G_reader_settings:readSetting("einkmotionlab_gif_mode") or "a2"
+    self.gif_clock = G_reader_settings:readSetting("einkmotionlab_gif_clock") or "original"
+    self.gif_loops = math.max(1, math.min(10,
+        tonumber(G_reader_settings:readSetting("einkmotionlab_gif_loops")) or 3))
     self.raw_ok = has_mxcfb and Device:isKindle() and Device:isRex()
         and Screen.fd ~= nil and Screen._get_next_marker ~= nil
     self.log_path = DataStorage:getSettingsDir() .. "/einkmotionlab.log"
@@ -1302,11 +1306,131 @@ function MotionLab:individualItems()
     return items
 end
 
+function MotionLab:setGifSetting(key, value)
+    self[key] = value
+    G_reader_settings:saveSetting("einkmotionlab_" .. key, value)
+end
+
+function MotionLab:playGif(path)
+    if self._gif_loading or self._gif_player then return end
+    self._gif_loading, self._gif_abort = true, false
+    local loading = InfoMessage:new{ text = "Preparing GIF frames…\n\nDuring playback, tap anywhere to stop." }
+    UIManager:show(loading)
+    local _, _, size = self:getPatchRect(self.patch_size)
+    local options = {
+        path = path, refresh_mode = self.gif_mode, clock_mode = self.gif_clock,
+        target_fps = math.max(1, self.target_fps),
+        queue_depth = math.max(1, math.min(8, self.queue_depth)), loops = self.gif_loops,
+    }
+    UIManager:scheduleIn(0.1, function()
+        if self._gif_abort then
+            self._gif_loading = nil
+            UIManager:close(loading)
+            return
+        end
+        local started = nowSeconds()
+        local ok, animation = pcall(function()
+            return dofile(plugin_dir .. "gifloader.lua").load(path, size, options.refresh_mode == "gray" and "gray" or "bayer")
+        end)
+        options.prepare_ms = (nowSeconds() - started) * 1000
+        UIManager:close(loading)
+        if not ok then
+            self._gif_loading = nil
+            self:appendLog({ "GIF LOAD ERROR " .. os.date("%Y-%m-%d %H:%M:%S"), tostring(animation) })
+            self:showInfo("Could not play GIF:\n\n" .. tostring(animation))
+            return
+        end
+        G_reader_settings:saveSetting("einkmotionlab_last_gif", path)
+        -- Let the loading dialog disappear before taking the page snapshot.
+        UIManager:scheduleIn(0.1, function()
+            self._gif_loading = nil
+            if self._gif_abort then animation:free(); return end
+            local started_ok, err = pcall(function()
+                dofile(plugin_dir .. "gifplayer.lua").start(self, animation, options)
+            end)
+            if not started_ok then
+                animation:free()
+                self:showInfo("Could not start GIF playback:\n\n" .. tostring(err))
+            end
+        end)
+    end)
+end
+
+function MotionLab:chooseGif()
+    local PathChooser = require("ui/widget/pathchooser")
+    local lfs = require("libs/libkoreader-lfs")
+    local previous = G_reader_settings:readSetting("einkmotionlab_last_gif")
+    local path = previous and previous:match("^(.*)/")
+        or G_reader_settings:readSetting("home_dir") or "/mnt/us"
+    if lfs.attributes(path, "mode") ~= "directory" then path = "." end
+    local chooser
+    local function choose(file) self:playGif(file) end
+    chooser = PathChooser:new{
+        title = "Tap a GIF to play", path = path,
+        select_directory = false, select_file = true,
+        file_filter = function(file) return file:lower():match("%.gif$") ~= nil end,
+        onConfirm = choose,
+        onMenuSelect = function(widget, item)
+            if item.path and lfs.attributes(item.path, "mode") == "file" then
+                UIManager:close(widget)
+                choose(item.path)
+                return true
+            end
+            return PathChooser.onMenuSelect(widget, item)
+        end,
+    }
+    UIManager:show(chooser)
+end
+
+function MotionLab:onCloseDocument()
+    self._gif_abort = true
+    if self._gif_player then self._gif_player:finish("book closed", true) end
+end
+
+function MotionLab:gifItems()
+    return {
+        { text = _("Play demo GIF"), callback = function() self:playGif(plugin_dir .. "demo.gif") end },
+        { text = _("Choose and play GIF…"), callback = function() self:chooseGif() end },
+        { text = _("Replay last GIF"),
+            enabled_func = function() return G_reader_settings:readSetting("einkmotionlab_last_gif") ~= nil end,
+            callback = function()
+                local path = G_reader_settings:readSetting("einkmotionlab_last_gif")
+                if path then self:playGif(path) end
+            end },
+        { text = _("GIF refresh mode"), sub_item_table = {
+            radioItem("A2 + software Bayer", function() return self.gif_mode == "a2" end,
+                function() self:setGifSetting("gif_mode", "a2") end),
+            radioItem("DU + software Bayer", function() return self.gif_mode == "du" end,
+                function() self:setGifSetting("gif_mode", "du") end),
+            radioItem("UI/AUTO grayscale", function() return self.gif_mode == "gray" end,
+                function() self:setGifSetting("gif_mode", "gray") end),
+        } },
+        { text = _("GIF timing"), sub_item_table = {
+            radioItem("Original GIF frame delays", function() return self.gif_clock == "original" end,
+                function() self:setGifSetting("gif_clock", "original") end),
+            radioItem("Use Fixed-clock target FPS", function() return self.gif_clock == "fixed" end,
+                function() self:setGifSetting("gif_clock", "fixed") end),
+        } },
+        { text = _("GIF repetitions"), sub_item_table = {
+            radioItem("Once", function() return self.gif_loops == 1 end,
+                function() self:setGifSetting("gif_loops", 1) end),
+            radioItem("3 times", function() return self.gif_loops == 3 end,
+                function() self:setGifSetting("gif_loops", 3) end),
+            radioItem("10 times", function() return self.gif_loops == 10 end,
+                function() self:setGifSetting("gif_loops", 10) end),
+        } },
+    }
+end
+
 function MotionLab:addToMainMenu(menu_items)
     menu_items.einkmotionlab = {
         text = _("E-Ink Motion / Grayscale Lab"),
         sorting_hint = "tools",
         sub_item_table = {
+            {
+                text = _("Run GIF test"),
+                sub_item_table = self:gifItems(),
+            },
             {
                 text = _("Diagnose renderer (screen stays still)"),
                 callback = function()
