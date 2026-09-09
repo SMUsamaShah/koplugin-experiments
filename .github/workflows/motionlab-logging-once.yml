@@ -1,0 +1,29 @@
+name: Motion Lab logging one-shot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/motionlab-logging-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Motion Lab logging
+        run: python .github/scripts/patch_motionlab_logging.py
+      - name: Remove one-shot helper files
+        run: |
+          rm .github/scripts/patch_motionlab_logging.py
+          rm .github/workflows/motionlab-logging-once.yml
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add Motion Lab single diagnostic log" || exit 0
+          git push
