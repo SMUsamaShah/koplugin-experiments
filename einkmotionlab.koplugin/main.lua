@@ -131,6 +131,14 @@ local function firstReadable(paths)
     return nil
 end
 
+local function firstReadableWithPath(paths)
+    for _, path in ipairs(paths) do
+        local value = readTextFile(path)
+        if value then return value, path end
+    end
+    return nil, nil
+end
+
 local function formatFreq(khz)
     if not khz then return "n/a" end
     return string.format("%.0f MHz", khz / 1000)
@@ -142,12 +150,14 @@ local function formatTemp(c)
 end
 
 function MotionLab:readSystemState()
-    local freq = tonumber(firstReadable({
+    local freq_raw, freq_path = firstReadableWithPath({
         "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
         "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq",
         "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
         "/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq",
-    }))
+    })
+    local freq = tonumber(freq_raw)
+    if freq_path then self._telemetry_freq_path = freq_path end
     local min_freq = tonumber(firstReadable({
         "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq",
         "/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq",
@@ -162,25 +172,35 @@ function MotionLab:readSystemState()
     })
 
     local hottest
+    local hottest_path
     local zones = {}
     for i = 0, 9 do
-        local raw = readTextFile(string.format("/sys/class/thermal/thermal_zone%d/temp", i))
+        local path = string.format("/sys/class/thermal/thermal_zone%d/temp", i)
+        local raw = readTextFile(path)
         local n = tonumber(raw)
         if n then
             if math.abs(n) > 1000 then n = n / 1000 end
             zones[#zones + 1] = string.format("tz%d=%.1fC", i, n)
-            if not hottest or n > hottest then hottest = n end
+            if not hottest or n > hottest then
+                hottest = n
+                hottest_path = path
+            end
         end
     end
     for i = 0, 3 do
-        local raw = readTextFile(string.format("/sys/class/hwmon/hwmon%d/temp1_input", i))
+        local path = string.format("/sys/class/hwmon/hwmon%d/temp1_input", i)
+        local raw = readTextFile(path)
         local n = tonumber(raw)
         if n then
             if math.abs(n) > 1000 then n = n / 1000 end
             zones[#zones + 1] = string.format("hwmon%d=%.1fC", i, n)
-            if not hottest or n > hottest then hottest = n end
+            if not hottest or n > hottest then
+                hottest = n
+                hottest_path = path
+            end
         end
     end
+    if hottest_path then self._telemetry_temp_path = hottest_path end
 
     local loadavg = readTextFile("/proc/loadavg")
     local meminfo = readTextFile("/proc/meminfo") or ""
@@ -197,6 +217,44 @@ function MotionLab:readSystemState()
         loadavg = loadavg or "n/a",
         mem_mb = mem_kb and (mem_kb / 1024) or nil,
     }
+end
+
+function MotionLab:readTelemetryState()
+    -- Keep in-animation probes deliberately tiny: one cached CPU sysfs read
+    -- and one cached temperature read. Full system scans happen only before
+    -- and after the timed animation.
+    local freq_raw
+    if self._telemetry_freq_path then
+        freq_raw = readTextFile(self._telemetry_freq_path)
+    else
+        freq_raw = firstReadable({
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
+            "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
+        })
+    end
+
+    local temp_raw
+    if self._telemetry_temp_path then
+        temp_raw = readTextFile(self._telemetry_temp_path)
+    else
+        temp_raw = firstReadable({
+            "/sys/class/thermal/thermal_zone0/temp",
+            "/sys/class/hwmon/hwmon0/temp1_input",
+        })
+    end
+    local temp = tonumber(temp_raw)
+    if temp and math.abs(temp) > 1000 then temp = temp / 1000 end
+
+    return {
+        freq_khz = tonumber(freq_raw),
+        temp_c = temp,
+    }
+end
+
+function MotionLab:telemetryStateText(state)
+    state = state or {}
+    return string.format("cpu=%s temp=%s",
+        formatFreq(state.freq_khz), formatTemp(state.temp_c))
 end
 
 function MotionLab:systemStateText(state)
@@ -252,11 +310,14 @@ function MotionLab:currentSettingsLines(spec, actual_size, run_frames, scheduler
 end
 
 function MotionLab:captureTelemetry(submitted, logical, row)
+    local started = nowSeconds()
+    local state = self:readTelemetryState()
     return {
         submitted = submitted,
         logical = logical,
         row = row,
-        state = self:readSystemState(),
+        state = state,
+        probe_ms = (nowSeconds() - started) * 1000,
     }
 end
 
@@ -280,11 +341,11 @@ function MotionLab:appendRunLog(spec, actual_size, run_frames, scheduler,
         for _, sample in ipairs(telemetry) do
             local r = sample.row or {}
             lines[#lines + 1] = string.format(
-                "submitted=%d logical=%d render=%.1fms refresh=%.1fms wait=%.1fms sleep=%.1fms interval=%.1fms late=%.1fms | %s",
+                "submitted=%d logical=%d render=%.1fms refresh=%.1fms wait=%.1fms sleep=%.1fms interval=%.1fms late=%.1fms probe=%.2fms | %s",
                 sample.submitted or 0, sample.logical or 0,
                 r.render_ms or 0, r.refresh_ms or 0, r.wait_ms or 0,
                 r.sleep_ms or 0, r.interval_ms or 0, r.lateness_ms or 0,
-                self:systemStateText(sample.state))
+                sample.probe_ms or 0, self:telemetryStateText(sample.state))
         end
     else
         lines[#lines + 1] = "none"
