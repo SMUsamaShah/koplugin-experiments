@@ -126,9 +126,9 @@ end
 local function firstReadable(paths)
     for _, path in ipairs(paths) do
         local value = readTextFile(path)
-        if value then return value, path end
+        if value then return value end
     end
-    return nil, nil
+    return nil
 end
 
 local function formatFreq(khz)
