@@ -1,19 +1,61 @@
 # E-Ink Motion / Grayscale Lab
 
-## 0.1.10: stable noise-hash rendering
+## PW4 rendering quirk: later noise coordinates became slower (fixed in 0.1.10)
 
-Normal animations now use the bounded bit-operation hash tested on PW4.
-The diagnostic found original SW Bayer rendering rising from about 175 ms at
-frame 1 to 477 ms at frame 90, with no display updates. Returning to frame 1
-immediately restored its early speed. The replacement stayed around 73–77 ms
-across all tested positions. These are CPU-render timings, not visible FPS.
+Animations initially ran quickly, then progressively slowed down. Changing
+refresh waveforms, queue depth or scheduler settings did not remove the main
+slowdown: it was happening inside the CPU-side noise renderer.
 
-Install over the existing plugin and restart KOReader. Repeat a normal
-120-frame animation with the same settings as before, then inspect/send
-`einkmotionlab.log`. Each normal run now records `noise_hash=bounded_bit_hash`.
-The noise pattern changes, but render modes, refresh paths and scheduling
-settings retain their previous behavior. Consistent on-screen animation was
-subsequently confirmed on a Kindle Paperwhite 4.
+The original hash used large coordinate-dependent products:
+
+```lua
+local n = (ix * 73856093 + iy * 19349663 + seed * 83492791) % 2147483647
+n = (n * 48271 + 1) % 2147483647
+return n / 2147483647
+```
+
+As the animation advances, its noise coordinates grow. Rendering those later
+coordinates was much more expensive on the PW4, even though the number of
+rendered blocks stayed the same.
+
+### How we isolated it
+
+We rendered selected animation positions into a private memory buffer with
+**no display updates**, then jumped back to the starting position. At 512 × 512
+with 2 px SW Bayer blocks, the device measured:
+
+| Logical frame | Original hash | Replacement hash |
+| --- | ---: | ---: |
+| 1 | 175.68 ms | 73.92 ms |
+| 90 | 476.70 ms | 75.53 ms |
+| 120 | 430.81 ms | 73.13 ms |
+| Back to 1 | 174.60 ms | 73.89 ms |
+
+Each value is the mean wall time of three renders. Process CPU time closely
+matched wall time, and every frequency sample reported 996 MHz. Returning to
+frame 1 immediately restored the original renderer's speed. This isolated a
+coordinate-dependent rendering cost without an e-ink queue involved.
+Short 24-frame tests could miss the later slowdown entirely.
+
+### Fix and limits of the finding
+
+Version **0.1.10** replaces the hash with explicit 32-bit bit-operation mixing,
+avoiding the growing large-product arithmetic. The replacement stayed around
+73–77 ms across all tested Bayer positions; consistent on-screen animation was
+then confirmed on the PW4. The noise pattern changes, while refresh paths,
+render modes and scheduler settings retain their previous behavior. Normal run
+logs identify the replacement with `noise_hash=bounded_bit_hash`.
+
+**The exact LuaJIT mechanism is still unconfirmed.** Intermediate expressions
+crossing the signed 32-bit range correlate with the original slowdown, making
+integer overflow guards or changes in compiled execution paths plausible.
+This is not proof of arithmetic corruption or a universal LuaJIT bug. The large
+slowdown did not reproduce in a local desktop LuaJIT test.
+
+**Practical lesson:** measure image generation separately from refresh calls,
+and benchmark late animation coordinates as well as early ones. A rendering
+bottleneck can look like an e-ink refresh limitation. These timings describe
+rendering cost, not visible display FPS.
 
 ## Renderer diagnostic
 
