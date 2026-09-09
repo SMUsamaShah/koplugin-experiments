@@ -16,78 +16,40 @@ jobs:
         with:
           fetch-depth: 0
       - name: Reduce in-animation temperature sampling
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           main = Path('einkmotionlab.koplugin/main.lua')
           s = main.read_text()
 
-          old = '''function MotionLab:readTelemetryState()
-    -- Keep in-animation probes deliberately tiny: one cached CPU sysfs read
-    -- and one cached temperature read. Full system scans happen only before
-    -- and after the timed animation.
-    local freq_raw
-    if self._telemetry_freq_path then
-        freq_raw = readTextFile(self._telemetry_freq_path)
-    else
-        freq_raw = firstReadable({
-            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
-            "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
-        })
-    end
+          start = s.index('function MotionLab:readTelemetryState()')
+          end = s.index('\nfunction MotionLab:systemStateText(state)', start)
+          replacement = '''function MotionLab:readTelemetryState()
+              -- During animation, sample CPU frequency only. Temperature changes much
+              -- more slowly and is captured by the full system snapshots immediately
+              -- before and after the timed animation, avoiding unnecessary sysfs reads.
+              local freq_raw
+              if self._telemetry_freq_path then
+                  freq_raw = readTextFile(self._telemetry_freq_path)
+              else
+                  freq_raw = firstReadable({
+                      "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
+                      "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
+                  })
+              end
 
-    local temp_raw
-    if self._telemetry_temp_path then
-        temp_raw = readTextFile(self._telemetry_temp_path)
-    else
-        temp_raw = firstReadable({
-            "/sys/class/thermal/thermal_zone0/temp",
-            "/sys/class/hwmon/hwmon0/temp1_input",
-        })
-    end
-    local temp = tonumber(temp_raw)
-    if temp and math.abs(temp) > 1000 then temp = temp / 1000 end
+              return {
+                  freq_khz = tonumber(freq_raw),
+              }
+          end
 
-    return {
-        freq_khz = tonumber(freq_raw),
-        temp_c = temp,
-    }
-end
-
-function MotionLab:telemetryStateText(state)
-    state = state or {}
-    return string.format("cpu=%s temp=%s",
-        formatFreq(state.freq_khz), formatTemp(state.temp_c))
-end
-'''
-          new = '''function MotionLab:readTelemetryState()
-    -- During animation, sample CPU frequency only. Temperature changes much
-    -- more slowly and is captured by the full system snapshots immediately
-    -- before and after the timed animation, avoiding unnecessary sysfs reads.
-    local freq_raw
-    if self._telemetry_freq_path then
-        freq_raw = readTextFile(self._telemetry_freq_path)
-    else
-        freq_raw = firstReadable({
-            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
-            "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
-        })
-    end
-
-    return {
-        freq_khz = tonumber(freq_raw),
-    }
-end
-
-function MotionLab:telemetryStateText(state)
-    state = state or {}
-    return string.format("cpu=%s", formatFreq(state.freq_khz))
-end
-'''
-          if old not in s:
-              raise SystemExit('expected telemetry block not found')
-          s = s.replace(old, new)
+          function MotionLab:telemetryStateText(state)
+              state = state or {}
+              return string.format("cpu=%s", formatFreq(state.freq_khz))
+          end
+          '''
+          s = s[:start] + replacement + s[end:]
           s = s.replace('"plugin_version=0.1.8",', '"plugin_version=0.1.9",')
           s = s.replace('"-- SAMPLES (first, every 10 submitted frames, last) --"', '"-- CPU FREQUENCY SAMPLES (first, every 10 submitted frames, last) --"')
           main.write_text(s)
@@ -98,11 +60,12 @@ end
 
           readme = Path('einkmotionlab.koplugin/README.md')
           r = readme.read_text()
-          old_readme = 'plus sparse samples at frame 1, every 10 submitted frames, and the final frame. Samples are collected in memory and written only after the animation to avoid disk I/O affecting the test.'
-          new_readme = 'plus sparse CPU-frequency samples at frame 1, every 10 submitted frames, and the final frame. Temperature is measured only in the full system snapshots immediately before and after the animation, since it changes slowly and does not need per-10-frame probing. Samples are collected in memory and written only after the animation to avoid disk I/O affecting the test.'
-          if old_readme not in r:
+          old = 'plus sparse samples at frame 1, every 10 submitted frames, and the final frame. Samples are collected in memory and written only after the animation to avoid disk I/O affecting the test.'
+          new = 'plus sparse CPU-frequency samples at frame 1, every 10 submitted frames, and the final frame. Temperature is measured only in the full system snapshots immediately before and after the animation, since it changes slowly and does not need per-10-frame probing. Samples are collected in memory and written only after the animation to avoid disk I/O affecting the test.'
+          if old not in r:
               raise SystemExit('expected README text not found')
-          readme.write_text(r.replace(old_readme, new_readme))
+          readme.write_text(r.replace(old, new))
+          PY
       - name: Commit changes and remove helper
         run: |
           git config user.name "github-actions[bot]"
