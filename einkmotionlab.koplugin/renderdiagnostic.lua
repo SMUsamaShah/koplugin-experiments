@@ -257,7 +257,7 @@ function Diagnostic.run(lab)
     local lines = {
         "================================================================",
         "RENDER DIAGNOSTIC " .. os.date("%Y-%m-%d %H:%M:%S"),
-        "plugin_version=0.1.12",
+        "plugin_version=0.1.13",
         "offscreen=true; refresh_calls=0; private_renderers=true",
         "Each position rendered 3 times; wall and process CPU time reported.",
         "Replacement hash changes the noise pattern, not just its execution.",

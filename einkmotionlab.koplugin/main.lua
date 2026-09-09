@@ -282,7 +282,7 @@ function MotionLab:currentSettingsLines(spec, actual_size, run_frames, scheduler
     local render_block = self:isBayerMotionTest(spec) and self.bayer_block_size
         or (spec.block_size or self.block_size)
     return {
-        "plugin_version=0.1.12",
+        "plugin_version=0.1.13",
         "noise_hash=bounded_bit_hash",
         "configured_patch_size=" .. tostring(self.patch_size),
         "actual_patch_size=" .. tostring(actual_size or self.patch_size),
@@ -1336,7 +1336,7 @@ function MotionLab:gifModeItems(play_now)
             end
         end
         if play_now then
-            items[#items + 1] = { text = selected.name, callback = callback }
+            items[#items + 1] = { text = selected.name, keep_menu_open = true, callback = callback }
         else
             items[#items + 1] = radioItem(selected.name,
                 function() return self:getGifMode().id == selected.id end, callback)
@@ -1423,9 +1423,11 @@ end
 
 function MotionLab:gifItems()
     return {
-        { text = _("Play demo GIF"), callback = function() self:playGif(plugin_dir .. "demo.gif") end },
-        { text = _("Choose and play GIF…"), callback = function() self:chooseGif() end },
-        { text = _("Replay last GIF"),
+        { text = _("Play demo GIF"), keep_menu_open = true,
+            callback = function() self:playGif(plugin_dir .. "demo.gif") end },
+        { text = _("Choose and play GIF…"), keep_menu_open = true,
+            callback = function() self:chooseGif() end },
+        { text = _("Replay last GIF"), keep_menu_open = true,
             enabled_func = function() return G_reader_settings:readSetting("einkmotionlab_last_gif") ~= nil end,
             callback = function()
                 local path = G_reader_settings:readSetting("einkmotionlab_last_gif")

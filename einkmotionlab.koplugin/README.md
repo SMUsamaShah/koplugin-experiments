@@ -96,7 +96,7 @@ The plugin is document-only so the experiment runs over a normal book page and r
 
 ## Start here
 
-### GIF playback (0.1.12)
+### GIF playback (0.1.13)
 
 Open **Tools → E-Ink Motion / Grayscale Lab → Run GIF test**:
 
@@ -104,6 +104,9 @@ Open **Tools → E-Ink Motion / Grayscale Lab → Run GIF test**:
 - **Choose and play GIF…** opens a file picker; tap a GIF on your Kindle.
 - **Replay last GIF** repeats the last successfully loaded file.
 - **Play last GIF with…** selects a mode and immediately replays the last GIF.
+
+Playback keeps the menu open, like the noise tests, so you can try another GIF
+or mode without reopening it.
 
 The image fits inside **Patch size** with its aspect ratio preserved. Tap
 anywhere (or press Back) to stop and restore the page. There is a preparation

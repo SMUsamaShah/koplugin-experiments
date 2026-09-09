@@ -179,7 +179,7 @@ function Player:finish(reason, quiet, externally_closed)
     local lines = {
         "================================================================",
         "GIF RUN " .. os.date("%Y-%m-%d %H:%M:%S"),
-        "plugin_version=0.1.12",
+        "plugin_version=0.1.13",
         "file=" .. (self.path:match("[^/]+$") or self.path),
         "source_frames=" .. #self.ends,
         string.format("size=%dx%d; cache_bytes=%d; prepare_ms=%.1f",
