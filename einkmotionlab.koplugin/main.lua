@@ -603,14 +603,12 @@ end
 function MotionLab:getVisualTests()
     local common = {
         { name = "KOReader A2 (gray input, no dither)", api = "a2" },
-        { name = "KOReader A2 + HW ordered dither", api = "a2", dither = true },
         { name = "KOReader A2 + SW Bayer binary dither", api = "a2",
             render_mode = "ordered_binary", block_size = self.bayer_block_size },
         { name = "KOReader A2 + SW stochastic binary dither", api = "a2",
             render_mode = "stochastic_binary", block_size = 2 },
 
         { name = "KOReader DU (gray input, no dither)", api = "fast" },
-        { name = "KOReader DU + HW ordered dither", api = "fast", dither = true },
         { name = "KOReader DU + SW Bayer binary dither", api = "fast",
             render_mode = "ordered_binary", block_size = self.bayer_block_size },
 

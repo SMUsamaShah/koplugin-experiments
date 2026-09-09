@@ -41,11 +41,9 @@ A phone video of the patch during the run is much more useful than timings alone
 ### KOReader refresh paths
 
 - A2 with grayscale input
-- A2 + hardware ordered dithering
 - A2 + software Bayer black/white dithering
 - A2 + software stochastic black/white dithering
 - DU/Fast with grayscale input
-- DU + hardware ordered dithering
 - DU + software Bayer black/white dithering
 - UI/AUTO
 
