@@ -1,5 +1,41 @@
 # E-Ink Motion / Grayscale Lab
 
+## 0.1.10: stable noise-hash rendering
+
+Normal animations now use the bounded bit-operation hash tested on PW4.
+The diagnostic found original SW Bayer rendering rising from about 175 ms at
+frame 1 to 477 ms at frame 90, with no display updates. Returning to frame 1
+immediately restored its early speed. The replacement stayed around 73–77 ms
+across all tested positions. These are CPU-render timings, not visible FPS.
+
+Install over the existing plugin and restart KOReader. Repeat a normal
+120-frame animation with the same settings as before, then inspect/send
+`einkmotionlab.log`. Each normal run now records `noise_hash=bounded_bit_hash`.
+The noise pattern changes, but render modes, refresh paths and scheduling
+settings retain their previous behavior. Consistent on-screen animation was
+subsequently confirmed on a Kindle Paperwhite 4.
+
+## Renderer diagnostic
+
+Install this folder over the existing plugin and restart KOReader. With a book
+open, select **Tools → E-Ink Motion / Grayscale Lab → Diagnose renderer (screen
+stays still)**. Wait for the result dialog; the screen intentionally stays still
+during the calculation. Send the updated `einkmotionlab.log` from KOReader's
+settings directory.
+
+This compares the original noise hash and an alternative bounded bit-operation
+hash in a private 512 × 512 memory buffer. Both gray (8 px blocks) and SW Bayer
+(2 px blocks) visit logical frames 1, 40, 60, 90, 120, 1, 120, 1, three renders
+per position after two early-frame warmups. It records wall time, process CPU
+time, JIT status, CPU frequency and memory. There are no screen refresh calls
+inside the diagnostic. The alternative changes the noise pattern. Private
+renderer copies may compile differently from the normal animation loop, so
+negative results do not conclusively exclude a JIT problem.
+
+The diagnostic retains the old renderer for comparison; normal animations use
+the replacement. This build is based on main commit
+`4be836858db88f9022521fbd14638bc4a1caa262` plus the diagnostic and hash changes.
+
 Experimental KOReader plugin for probing how smoothly a small region can animate on a Kindle Paperwhite 4 (Rex).
 
 It draws a centered **Perlin-like moving grayscale field** and runs the same visual through different waveform, dithering, queuing, and region-size strategies. The goal is not accurate grayscale reproduction; it is to find refresh paths that *look* fluid for organic grayscale motion.

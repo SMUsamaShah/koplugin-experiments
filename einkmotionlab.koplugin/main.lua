@@ -14,9 +14,12 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local DataStorage = require("datastorage")
 local ffi = require("ffi")
+local bit = require("bit")
 local ffiUtil = require("ffi/util")
 local logger = require("logger")
 local _ = require("gettext")
+local diagnostic_path = (debug.getinfo(1, "S").source:match("^@(.*/)") or "./")
+    .. "renderdiagnostic.lua"
 
 local Screen = Device.screen
 local C = ffi.C
@@ -53,11 +56,21 @@ local function lerp(a, b, t)
     return a + (b - a) * t
 end
 
--- Fast deterministic integer hash; good enough for visual value noise.
+-- The original large-product hash became slower at later noise coordinates
+-- on PW4, even in an off-screen CPU-only test. Use the bit-operation hash
+-- that maintained consistent timing in that device test.
 local function hash2(ix, iy, seed)
-    local n = (ix * 73856093 + iy * 19349663 + seed * 83492791) % 2147483647
-    n = (n * 48271 + 1) % 2147483647
-    return n / 2147483647
+    local h = bit.bxor(bit.tobit(ix), bit.rol(bit.tobit(iy), 16),
+        bit.rol(bit.tobit(seed), 8), 0x9e3779b9)
+    h = bit.bxor(h, bit.lshift(h, 13))
+    h = bit.bxor(h, bit.rshift(h, 17))
+    h = bit.bxor(h, bit.lshift(h, 5))
+    h = bit.tobit(h + bit.lshift(h, 10))
+    h = bit.bxor(h, bit.rshift(h, 6))
+    h = bit.tobit(h + bit.lshift(h, 3))
+    h = bit.bxor(h, bit.rshift(h, 11))
+    h = bit.tobit(h + bit.lshift(h, 15))
+    return bit.band(h, 0x7fffffff) / 2147483647
 end
 
 local function valueNoise(x, y, seed)
@@ -269,7 +282,8 @@ function MotionLab:currentSettingsLines(spec, actual_size, run_frames, scheduler
     local render_block = self:isBayerMotionTest(spec) and self.bayer_block_size
         or (spec.block_size or self.block_size)
     return {
-        "plugin_version=0.1.9",
+        "plugin_version=0.1.10",
+        "noise_hash=bounded_bit_hash",
         "configured_patch_size=" .. tostring(self.patch_size),
         "actual_patch_size=" .. tostring(actual_size or self.patch_size),
         "configured_frames=" .. tostring(self.frames),
@@ -1293,6 +1307,15 @@ function MotionLab:addToMainMenu(menu_items)
         text = _("E-Ink Motion / Grayscale Lab"),
         sorting_hint = "tools",
         sub_item_table = {
+            {
+                text = _("Diagnose renderer (screen stays still)"),
+                callback = function()
+                    self:runSafely("renderer diagnostic", function()
+                        if Screen.refreshWaitForLast then Screen:refreshWaitForLast() end
+                        return dofile(diagnostic_path).run(self)
+                    end)
+                end,
+            },
             {
                 text = _("Run EVERYTHING (recommended first test)"),
                 callback = function()
