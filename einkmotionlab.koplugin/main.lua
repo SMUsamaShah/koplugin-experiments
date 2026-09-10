@@ -1421,10 +1421,30 @@ function MotionLab:onCloseDocument()
     if self._gif_player then self._gif_player:finish("book closed", true) end
 end
 
+function MotionLab:demoGifItems()
+    local demos = {
+        { name = _("Original dot + gray gradient"), file = "demo.gif" },
+        { name = _("Moving gray clouds"), file = "demo_clouds.gif" },
+        { name = _("Moving gray wave"), file = "demo_wave.gif" },
+        { name = _("Soft circle with clockwise gradient"), file = "demo_orbit.gif" },
+        { name = _("Soft gray ripples"), file = "demo_ripple.gif" },
+    }
+    local items = {}
+    for _, demo in ipairs(demos) do
+        local selected = demo
+        items[#items + 1] = {
+            text = selected.name,
+            keep_menu_open = true,
+            callback = function() self:playGif(plugin_dir .. selected.file) end,
+        }
+    end
+    return items
+end
+
 function MotionLab:gifItems()
     return {
-        { text = _("Play demo GIF"), keep_menu_open = true,
-            callback = function() self:playGif(plugin_dir .. "demo.gif") end },
+        { text = _("Play demo GIF…"), keep_menu_open = true,
+            sub_item_table = self:demoGifItems() },
         { text = _("Choose and play GIF…"), keep_menu_open = true,
             callback = function() self:chooseGif() end },
         { text = _("Replay last GIF"), keep_menu_open = true,
