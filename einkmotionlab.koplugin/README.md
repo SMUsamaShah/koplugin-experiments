@@ -86,6 +86,18 @@ It draws a centered **Perlin-like moving grayscale field** and runs the same vis
 
 Copy `einkmotionlab.koplugin` into KOReader's `plugins` directory and restart KOReader.
 
+After installing 0.1.14 once, use **update plugin**, the last entry in this
+plugin's menu, for future updates. It connects through KOReader's Wi-Fi flow,
+downloads only `einkmotionlab.koplugin` from this repository's `main` branch,
+and offers to restart KOReader. No SSH, Git, release ZIP, or GitHub login is
+needed. Tap the download dialog to cancel.
+
+Downloads use one pinned revision, verified HTTPS, Git blob checksums, and Lua
+syntax checks. Files are staged before the installed folder is replaced; a
+failed installation attempts to restore the original. The previous folder is
+retained as `einkmotionlab.koplugin.update-backup`, replaced on the next
+successful staging. Settings and logs in KOReader's settings directory persist.
+
 Open a book, then open:
 
 **E-Ink Motion / Grayscale Lab**
@@ -94,9 +106,35 @@ For quicker repeated testing, the plugin now appears directly in the main **Tool
 
 The plugin is document-only so the experiment runs over a normal book page and restores the tested area afterwards.
 
+### Reuse the updater in another plugin
+
+Copy **`pluginupdater.lua`** into that plugin. Create one updater instance and
+append its menu item last:
+
+```lua
+-- plugin_dir is the directory containing this plugin's main.lua, with a trailing slash.
+local updater = dofile(plugin_dir .. "pluginupdater.lua").new{
+    repository = "owner/repository",
+    branch = "main",
+    folder = "example.koplugin", -- "" if plugin files are at the repository root
+}
+items[#items + 1] = updater:menuItem()
+```
+
+The destination is inferred from the updater file's location. Optional
+`can_update = function() ... end` disables updates while the plugin is busy.
+Keep user-created data outside the plugin folder: this is a complete folder
+replacement, including removal of obsolete files. The updater itself is updated
+too. Public repositories and ordinary files/subdirectories are supported, up to
+512 files, 8 MiB per file and 32 MiB total; symlinks and submodules are rejected.
+GitHub rate limits and download failures leave the installed copy in place.
+Updater regression checks: run `python tests/test_plugin_updater.py` with
+Python's `lupa` package installed. These use temporary folders and mocked
+network/UI calls; verify the Wi-Fi and restart flow on the device too.
+
 ## Start here
 
-### GIF playback (0.1.13)
+### GIF playback (0.1.14)
 
 Open **Tools → E-Ink Motion / Grayscale Lab → Run GIF test**:
 

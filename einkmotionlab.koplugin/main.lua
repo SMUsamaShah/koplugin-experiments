@@ -282,7 +282,7 @@ function MotionLab:currentSettingsLines(spec, actual_size, run_frames, scheduler
     local render_block = self:isBayerMotionTest(spec) and self.bayer_block_size
         or (spec.block_size or self.block_size)
     return {
-        "plugin_version=0.1.13",
+        "plugin_version=0.1.14",
         "noise_hash=bounded_bit_hash",
         "configured_patch_size=" .. tostring(self.patch_size),
         "actual_patch_size=" .. tostring(actual_size or self.patch_size),
@@ -1455,6 +1455,12 @@ function MotionLab:gifItems()
 end
 
 function MotionLab:addToMainMenu(menu_items)
+    self._plugin_updater = self._plugin_updater or dofile(plugin_dir .. "pluginupdater.lua").new{
+        repository = "SMUsamaShah/koplugin-experiments",
+        branch = "main",
+        folder = "einkmotionlab.koplugin",
+        can_update = function() return not self._gif_loading and not self._gif_player end,
+    }
     menu_items.einkmotionlab = {
         text = _("E-Ink Motion / Grayscale Lab"),
         sorting_hint = "tools",
@@ -1641,6 +1647,7 @@ function MotionLab:addToMainMenu(menu_items)
                         function() self:setBlockSize(8) end),
                 },
             },
+            self._plugin_updater:menuItem(),
         },
     }
 end
