@@ -11,5 +11,6 @@ local function radioItem(text, checked, callback)
 end
 
 dofile(plugin_dir .. "pagecurlmenu.lua").augment(AnimationLab, radioItem)
+dofile(plugin_dir .. "pagecurlcleanup.lua").augment(AnimationLab)
 
 return AnimationLab
