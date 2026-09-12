@@ -31,13 +31,9 @@ local function radioItem(text, checked, callback)
     }
 end
 
-local Renderers = {
-    strip = dofile(plugin_dir .. "stripreveal.lua"),
-    thin_curl = dofile(plugin_dir .. "thinpagecurl.lua"),
-}
-
-dofile(plugin_dir .. "pagecurlmenu.lua").augment(AnimationLab, radioItem)
-dofile(plugin_dir .. "pageturnhook.lua").augment(AnimationLab, Renderers)
+local StripReveal = dofile(plugin_dir .. "stripreveal.lua")
+dofile(plugin_dir .. "stripmenu.lua").augment(AnimationLab, radioItem)
+dofile(plugin_dir .. "pageturnhook.lua").augment(AnimationLab, StripReveal)
 
 local updater = dofile(plugin_dir .. "pluginupdater.lua").new{
     repository = "SMUsamaShah/koplugin-experiments",
