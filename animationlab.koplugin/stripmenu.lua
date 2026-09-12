@@ -10,11 +10,18 @@ function Menu.augment(AnimationLab, radioItem)
         -- New key on purpose: do not inherit the old curl-era page_waveform
         -- setting, which could otherwise silently force DU after upgrading.
         self.strip_waveform = G_reader_settings:readSetting("animationlab_strip_waveform") or "auto"
+        self.strip_shape = G_reader_settings:readSetting("animationlab_strip_shape") or "straight"
+        if self.strip_shape ~= "straight" and self.strip_shape ~= "diagonal"
+                and self.strip_shape ~= "bottom_curve" then
+            self.strip_shape = "straight"
+        end
         self.page_scheduler = G_reader_settings:readSetting("animationlab_page_scheduler") or "free"
         if self.page_scheduler ~= "free" and self.page_scheduler ~= "fixed" then
             self.page_scheduler = "free"
         end
         self.page_delay_ms = tonumber(G_reader_settings:readSetting("animationlab_page_delay_ms")) or 40
+        local saved_full_refresh = G_reader_settings:readSetting("animationlab_strip_full_refresh")
+        self.strip_full_refresh = saved_full_refresh == true
         local saved_auto = G_reader_settings:readSetting("animationlab_auto_page_turn")
         self.auto_page_turn = saved_auto == nil and true or saved_auto == true
         self:onAnimationLabRegisterActions()
@@ -33,8 +40,10 @@ function Menu.augment(AnimationLab, radioItem)
     function AnimationLab:getPageTurnConfig()
         return {
             waveform = self.strip_waveform,
+            shape = self.strip_shape,
             scheduler = self.page_scheduler,
             delay_ms = self.page_delay_ms,
+            full_refresh = self.strip_full_refresh,
         }
     end
 
@@ -72,6 +81,14 @@ function Menu.augment(AnimationLab, radioItem)
             text = _("Page-turn animation settings"),
             sub_item_table = {
                 {
+                    text = _("Reveal shape"),
+                    sub_item_table = {
+                        settingRadio(self, _("Straight vertical (ZIP original)"), "strip_shape", "straight"),
+                        settingRadio(self, _("Diagonal — bottom first"), "strip_shape", "diagonal"),
+                        settingRadio(self, _("Curved bottom flip"), "strip_shape", "bottom_curve"),
+                    },
+                },
+                {
                     text = _("Waveform"),
                     sub_item_table = {
                         settingRadio(self, _("AUTO / UI (ZIP original)"), "strip_waveform", "auto"),
@@ -101,6 +118,14 @@ function Menu.augment(AnimationLab, radioItem)
                         settingRadio(self, "100 ms", "page_delay_ms", 100),
                     },
                 },
+                {
+                    text = _("Full clean refresh afterwards"),
+                    checked_func = function() return self.strip_full_refresh end,
+                    callback = function()
+                        self:setPageSetting("strip_full_refresh", not self.strip_full_refresh)
+                    end,
+                    help_text = _("After the animation, force a full-screen refreshFull() cleanup. Useful with A2 ghosting, but slower and may visibly flash. When disabled, the normal full-screen UI settle is still used."),
+                },
             },
         }
     end
@@ -114,7 +139,7 @@ function Menu.augment(AnimationLab, radioItem)
                     text = _("Animate normal page turns"),
                     checked_func = function() return self.auto_page_turn end,
                     callback = function() self:setAutoPageTurn(not self.auto_page_turn) end,
-                    help_text = _("Animate normal one-page taps, swipes and page-turn keys with the KPW4 six-strip reveal."),
+                    help_text = _("Animate normal one-page taps, swipes and page-turn keys with the KPW4 six-step reveal."),
                 },
                 self:pageTurnSettingsItem(),
                 {
