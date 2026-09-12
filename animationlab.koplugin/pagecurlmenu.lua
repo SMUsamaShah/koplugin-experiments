@@ -1,29 +1,15 @@
-local PageCurl = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "pagecurl.lua")
-
 local Menu = {}
-local Screen = require("device").screen
 
 function Menu.augment(AnimationLab, radioItem)
     local Dispatcher = require("dispatcher")
-    local UIManager = require("ui/uimanager")
-    local logger = require("logger")
     local _ = require("gettext")
-
-    local old_capture = AnimationLab.captureRealPagePair
-    function AnimationLab:captureRealPagePair(direction)
-        self._animationlab_bypass_auto = true
-        local ok, old, new, err = pcall(old_capture, self, direction)
-        self._animationlab_bypass_auto = false
-        if not ok then error(old, 0) end
-        return old, new, err
-    end
 
     local old_init = AnimationLab.init
     function AnimationLab:init()
         old_init(self)
         self.page_waveform = G_reader_settings:readSetting("animationlab_page_waveform") or "du"
         self.page_dither = G_reader_settings:readSetting("animationlab_page_dither") or "gray"
-        self.page_scheduler = G_reader_settings:readSetting("animationlab_page_scheduler") or "free"
+        self.page_scheduler = G_reader_settings:readSetting("animationlab_page_scheduler") or "bounded"
         self.page_target_fps = tonumber(G_reader_settings:readSetting("animationlab_page_target_fps")) or 20
         self.page_queue_depth = tonumber(G_reader_settings:readSetting("animationlab_page_queue_depth")) or 4
         self.page_frames = tonumber(G_reader_settings:readSetting("animationlab_page_frames")) or 12
@@ -31,10 +17,6 @@ function Menu.augment(AnimationLab, radioItem)
         local saved_auto = G_reader_settings:readSetting("animationlab_auto_page_turn")
         self.auto_page_turn = saved_auto == nil and true or saved_auto == true
         self:onAnimationLabRegisterActions()
-        self:installNavigationHooks()
-        UIManager:nextTick(function()
-            if self.ui then self:installNavigationHooks() end
-        end)
     end
 
     function AnimationLab:setPageSetting(key, value)
@@ -59,48 +41,6 @@ function Menu.augment(AnimationLab, radioItem)
         }
     end
 
-    function AnimationLab:installNavigationHooks()
-        local function hook(nav)
-            if not nav or nav._animationlab_original_onGotoViewRel then return end
-            local original = nav.onGotoViewRel
-            if type(original) ~= "function" then return end
-
-            nav._animationlab_original_onGotoViewRel = original
-            nav.onGotoViewRel = function(nav_self, diff, no_page_turn)
-                local step = tonumber(diff)
-                if self._animationlab_bypass_auto
-                    or not self.auto_page_turn
-                    or no_page_turn == true
-                    or (step ~= 1 and step ~= -1) then
-                    return original(nav_self, diff, no_page_turn)
-                end
-
-                local top = UIManager:getTopmostVisibleWidget()
-                if top and top.name and top.name ~= "ReaderUI" then
-                    return original(nav_self, diff, no_page_turn)
-                end
-
-                if self._page_turn_running then
-                    return true
-                end
-
-                local ready = PageCurl.preflight(self:getPageTurnConfig())
-                if not ready then
-                    return original(nav_self, diff, no_page_turn)
-                end
-
-                local started = self:runConfiguredPageTurn(step, true)
-                if started then return true end
-
-                logger.warn("AnimationLab: automatic page turn could not start; falling back")
-                return original(nav_self, diff, no_page_turn)
-            end
-        end
-
-        hook(self.ui and self.ui.paging)
-        hook(self.ui and self.ui.rolling)
-    end
-
     function AnimationLab:onAnimationLabRegisterActions()
         Dispatcher:registerAction("animationlab_animated_next", {
             category = "none",
@@ -117,11 +57,11 @@ function Menu.augment(AnimationLab, radioItem)
     end
 
     function AnimationLab:onAnimationLabAnimatedNext()
-        self:runConfiguredPageTurn(1)
+        self:turnPageForTest(1)
     end
 
     function AnimationLab:onAnimationLabAnimatedPrevious()
-        self:runConfiguredPageTurn(-1)
+        self:turnPageForTest(-1)
     end
 
     local function settingRadio(self, text, field, value)
@@ -211,27 +151,26 @@ function Menu.augment(AnimationLab, radioItem)
         }
     end
 
-    local old_add = AnimationLab.addToMainMenu
     function AnimationLab:addToMainMenu(menu_items)
-        old_add(self, menu_items)
-        local root = menu_items.animationlab
-        if not root then return end
-
-        root.sub_item_table = {
-            {
-                text = _("Animate normal page turns"),
-                checked_func = function() return self.auto_page_turn end,
-                callback = function() self:setAutoPageTurn(not self.auto_page_turn) end,
-                help_text = _("Use the configured animation for normal one-page taps, swipes and page-turn keys."),
-            },
-            self:pageTurnSettingsItem(),
-            {
-                text = _("Test animated next page"),
-                callback = function() self:runConfiguredPageTurn(1) end,
-            },
-            {
-                text = _("Test animated previous page"),
-                callback = function() self:runConfiguredPageTurn(-1) end,
+        menu_items.animationlab = {
+            text = _("E-Ink Animation Lab"),
+            sorting_hint = "more_tools",
+            sub_item_table = {
+                {
+                    text = _("Animate normal page turns"),
+                    checked_func = function() return self.auto_page_turn end,
+                    callback = function() self:setAutoPageTurn(not self.auto_page_turn) end,
+                    help_text = _("Animate normal one-page taps, swipes and page-turn keys after KOReader has rendered the destination page."),
+                },
+                self:pageTurnSettingsItem(),
+                {
+                    text = _("Test animated next page"),
+                    callback = function() self:turnPageForTest(1) end,
+                },
+                {
+                    text = _("Test animated previous page"),
+                    callback = function() self:turnPageForTest(-1) end,
+                },
             },
         }
     end
