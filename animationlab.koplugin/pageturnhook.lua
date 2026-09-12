@@ -56,7 +56,7 @@ function Hook.augment(AnimationLab, Renderer)
                 owner._animationlab_force_once = nil
                 state.armed = true
                 state.suppress = false
-                logger.info("AnimationLab: armed KPW4 strip reveal, direction", state.direction)
+                logger.info("AnimationLab: armed KPW4 reveal, direction", state.direction)
             end
             return state.original_beforePaint(screen, ...)
         end
@@ -107,18 +107,26 @@ function Hook.augment(AnimationLab, Renderer)
                 state.suppress = true
                 state.bypass = true
                 logger.info("AnimationLab: intercepted repaint via", name,
-                    "direction", direction, "scheduler", config.scheduler,
-                    "dither", config.dither, "delay_ms", config.delay_ms)
+                    "direction", direction, "shape", config.shape,
+                    "waveform", config.waveform, "scheduler", config.scheduler,
+                    "delay_ms", config.delay_ms, "full_refresh", config.full_refresh)
 
                 local ok, result = pcall(Renderer.run, old_bb, new_bb, direction, config)
                 if ok then
                     restoreDestination(screen, new_bb)
-                    -- Match the uploaded KPW4 patch: finish with one exact,
-                    -- full-screen UI-quality refresh after the six strip updates.
-                    if screen.refreshUI then
-                        screen:refreshUI(0, 0, screen.bb:getWidth(), screen.bb:getHeight())
+                    local w, h = screen.bb:getWidth(), screen.bb:getHeight()
+
+                    if config.full_refresh and screen.refreshFull then
+                        -- Strong cleanup option for aggressive waveforms such as
+                        -- A2. This is deliberately stronger than the original
+                        -- patch's AUTO/UI settle and may visibly flash.
+                        screen:refreshFull(0, 0, w, h)
+                    elseif screen.refreshUI then
+                        -- Original patch behavior: one full-screen UI/AUTO
+                        -- settle after the six reveal updates.
+                        screen:refreshUI(0, 0, w, h)
                     elseif screen.refreshPartial then
-                        screen:refreshPartial(0, 0, screen.bb:getWidth(), screen.bb:getHeight())
+                        screen:refreshPartial(0, 0, w, h)
                     end
                     if screen.refreshWaitForLast then screen:refreshWaitForLast() end
 
