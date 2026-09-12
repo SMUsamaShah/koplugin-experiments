@@ -18,12 +18,18 @@ See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, 
 
 Location: `animationlab.koplugin/`
 
-Version **0.4.2** uses KOReader's normal navigation/rendering pipeline and offers two page-turn styles:
+Version **0.5.0** keeps only the KPW4 six-strip reveal from the uploaded working patch. The page-curl renderer and style selector have been removed completely.
 
-- **KPW4 strip reveal (ZIP exact)** — the uploaded KPW4-modified page animation reproduced directly: 6 steps, 40 ms spacing, `refreshUI()` only on the newly revealed full-height strip, followed by one final full-screen UI settle. This is the default style.
-- **Thin page curl** — a narrower/lower-cost replacement for the previous thick curl, retaining DU/A2, software and Rex hardware dithering, scheduling, frame count and delay controls.
+KOReader still performs normal page navigation and destination-page rendering. Animation Lab captures the old and new framebuffers around that repaint, then reveals the destination in **6 equal full-height strips**, refreshing only the newly exposed strip at each step. A final full-screen `refreshUI()` settles the exact page.
 
-The repaint hook snapshots the old framebuffer in `Screen:beforePaint()`, captures the completed destination framebuffer immediately before the first physical panel update by wrapping the dynamically dispatched `refresh*Imp` methods, runs the selected renderer, suppresses redundant queued refreshes, and restores KOReader's normal periodic-refresh cadence.
+The strip reveal now supports:
+
+- **Original grayscale / no dither**, SW Bayer, stochastic, Floyd-Steinberg, Atkinson, and plain threshold dithering;
+- **Free-running (ZIP original)**, Fixed interval, Bounded EPDC queue, and Synchronized scheduling;
+- configurable bounded-queue depth;
+- configurable strip delay from 0 to 100 ms.
+
+The original uploaded behavior remains the default: no dithering, free-running scheduling, **40 ms** strip delay, and six strips.
 
 The menu remains intentionally small: automatic-animation toggle, page-turn settings, two test actions, and **update plugin** last.
 
