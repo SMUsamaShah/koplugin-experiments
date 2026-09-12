@@ -18,20 +18,25 @@ See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, 
 
 Location: `animationlab.koplugin/`
 
-Version **0.6.0** keeps only the page-turn method that performed well on Kindle Paperwhite 4: the six-strip reveal derived from the uploaded KPW4 page-animation patch.
+Version **0.7.0** keeps the fast six-step reveal derived from the uploaded KPW4 page-animation patch and adds page-like reveal geometry without restoring the slower curl renderer.
 
-The animation keeps its fixed six-strip geometry and exposes only the variables that remain useful on-device:
+Available reveal shapes:
 
-- **Waveform:** AUTO/UI (original), DU/Fast, or A2;
-- **Scheduling:** Free-running (original) or Fixed interval;
-- **Strip delay:** 0–100 ms, with 40 ms matching the original patch.
+- **Straight vertical** — original KPW4 strip reveal;
+- **Diagonal — bottom first** — bottom leads, top lags, then both converge at the end;
+- **Curved bottom flip** — lower bands accelerate early with a curved edge, then slow so the page finishes aligned.
 
-Software dithering, the page-curl renderer, bounded queue scheduling, synchronized scheduling, and queue-depth controls were removed after device testing showed worse animation performance.
+All three shapes still use only **six physical E-Ink updates** per turn. The shaped modes calculate the edge in horizontal framebuffer bands and submit one bounding-rectangle update per temporal step.
 
-The original known-good baseline remains **AUTO/UI + Free-running + 40 ms + 6 strips**.
+Useful on-device controls are:
 
-KOReader performs navigation and destination-page rendering normally. Animation Lab captures the old/new framebuffers around that repaint, reveals only the newly exposed strip on each step, suppresses the redundant queued refresh, and finishes with one full-screen UI settle.
+- **Waveform:** AUTO/UI, DU/Fast, or A2;
+- **Scheduling:** Free-running or Fixed interval;
+- **Strip delay:** 0–100 ms, with 40 ms matching the original patch;
+- **Full clean refresh afterwards:** optional `refreshFull()` cleanup for aggressive modes such as A2. When disabled, the normal final `refreshUI()` / AUTO settle remains.
 
-The menu remains intentionally small: automatic-animation toggle, waveform/scheduler/delay settings, two test actions, and **update plugin** last.
+The original known-good baseline remains **Straight + AUTO/UI + Free-running + 40 ms** with full clean refresh disabled.
+
+KOReader performs navigation and destination-page rendering normally. Animation Lab captures the old/new framebuffers around that repaint, performs the reveal, suppresses the redundant queued refresh, and restores the exact final page.
 
 See `animationlab.koplugin/README.md` for exact behavior and settings.
