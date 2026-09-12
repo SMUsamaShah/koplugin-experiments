@@ -22,9 +22,11 @@ See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, 
 
 Location: `animationlab.koplugin/`
 
-Version **0.4.0** combines the Motion Lab display experiments with the repaint architecture used by the proven KPW4 page-animation patch.
+Version **0.4.1** combines the Motion Lab display experiments with the repaint architecture used by the proven KPW4 page-animation patch.
 
-KOReader now performs page navigation and destination-page rendering normally. Animation Lab snapshots the old framebuffer in `Screen:beforePaint()`, captures the completed destination framebuffer at the first physical refresh, animates between those two buffers, suppresses the now-redundant queued refreshes for that paint cycle, and finishes with one UI-quality settle refresh.
+KOReader performs page navigation and destination-page rendering normally. Animation Lab snapshots the old framebuffer in `Screen:beforePaint()`, captures the completed destination framebuffer immediately before the first physical panel update, animates between those two buffers, suppresses the now-redundant queued refreshes for that paint cycle, and finishes with one UI-quality settle refresh.
+
+Version 0.4.1 hooks the framebuffer `refresh*Imp` methods rather than the public `Screen.refresh*` methods. KOReader caches the public refresh function references when `UIManager` loads, so replacing them later from a plugin cannot intercept the repaint queue; the implementation methods are still dynamically dispatched and provide the correct interception point.
 
 This means standard taps, swipes and page-turn keys work through KOReader's normal code instead of being replaced by plugin navigation logic. A very small `onGotoViewRel` wrapper is retained only to record the visual direction for eligible one-page turns.
 
