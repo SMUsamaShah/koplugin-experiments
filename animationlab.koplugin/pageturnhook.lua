@@ -5,10 +5,9 @@ local logger = require("logger")
 local Screen = Device.screen
 local Hook = {}
 
--- UIManager caches the public Screen.refresh* function objects at module-load time,
--- so replacing Screen.refreshUI/refreshFast/etc. later does NOT intercept repaint.
--- The cached public methods still call self:refresh*Imp() dynamically, however,
--- which makes these implementation methods the stable interception point.
+-- UIManager caches the public Screen.refresh* functions at module load, while
+-- those functions still dispatch to refresh*Imp dynamically. Intercept the Imp
+-- methods so a plugin loaded later can replace the physical repaint reliably.
 local REFRESH_IMP_METHODS = {
     "refreshFullImp",
     "refreshPartialImp",
@@ -30,7 +29,7 @@ local function restoreDestination(screen, new_bb)
     screen.bb:blitFrom(new_bb, 0, 0, 0, 0, w, h)
 end
 
-function Hook.augment(AnimationLab, PageCurl)
+function Hook.augment(AnimationLab, Renderers)
     local state = Screen._animationlab_page_turn_hook
     if not state then
         state = {
@@ -49,8 +48,7 @@ function Hook.augment(AnimationLab, PageCurl)
             local first_paint = not screen.painting
             local owner = state.owner
             local enabled = owner and (owner.auto_page_turn or owner._animationlab_force_once)
-            if first_paint and not state.bypass and enabled
-                and owner._animationlab_pending_direction then
+            if first_paint and not state.bypass and enabled and owner._animationlab_pending_direction then
                 freeBuffer(state.old_bb)
                 state.old_bb = screen.bb:copy()
                 state.direction = owner._animationlab_pending_direction
@@ -58,7 +56,8 @@ function Hook.augment(AnimationLab, PageCurl)
                 owner._animationlab_force_once = nil
                 state.armed = true
                 state.suppress = false
-                logger.info("AnimationLab: armed page-turn capture, direction", state.direction)
+                logger.info("AnimationLab: armed page-turn capture, direction", state.direction,
+                    "style", owner.page_style)
             end
             return state.original_beforePaint(screen, ...)
         end
@@ -76,15 +75,9 @@ function Hook.augment(AnimationLab, PageCurl)
 
         local function interceptRefreshImp(name, original)
             return function(screen, ...)
-                if state.bypass then
-                    return original(screen, ...)
-                end
-                if state.suppress then
-                    return
-                end
-                if not state.armed or not state.old_bb then
-                    return original(screen, ...)
-                end
+                if state.bypass then return original(screen, ...) end
+                if state.suppress then return end
+                if not state.armed or not state.old_bb then return original(screen, ...) end
 
                 local owner = state.owner
                 if not owner then
@@ -96,7 +89,8 @@ function Hook.augment(AnimationLab, PageCurl)
                 end
 
                 local config = owner:getPageTurnConfig()
-                local ready, why = PageCurl.preflight(config)
+                local renderer = Renderers[config.style] or Renderers.strip
+                local ready, why = renderer.preflight(config)
                 if not ready then
                     logger.warn("AnimationLab: page-turn preflight failed:", why)
                     state.armed = false
@@ -106,9 +100,6 @@ function Hook.augment(AnimationLab, PageCurl)
                     return original(screen, ...)
                 end
 
-                -- KOReader has now painted the real destination page into Screen.bb,
-                -- but this first refresh has not yet reached the panel. Snapshot it,
-                -- then replace the queued refresh sequence with our animation.
                 local old_bb = state.old_bb
                 local new_bb = screen.bb:copy()
                 local direction = state.direction or 1
@@ -117,15 +108,14 @@ function Hook.augment(AnimationLab, PageCurl)
                 state.armed = false
                 state.suppress = true
                 state.bypass = true
-                logger.info("AnimationLab: intercepted repaint via", name, "direction", direction)
+                logger.info("AnimationLab: intercepted repaint via", name,
+                    "direction", direction, "style", config.style)
 
-                local ok, result = pcall(PageCurl.run, old_bb, new_bb, direction, config)
+                local ok, result = pcall(renderer.run, old_bb, new_bb, direction, config)
                 if ok then
                     restoreDestination(screen, new_bb)
-
-                    -- Settle to a crisp grayscale destination page once, matching
-                    -- the proven KPW4 patch architecture. Because bypass is set,
-                    -- this passes straight through our refresh*Imp wrappers.
+                    -- Both styles end with the exact destination in Screen.bb.
+                    -- The uploaded KPW4 patch does one final UI-quality settle.
                     if screen.refreshUI then
                         screen:refreshUI(0, 0, screen.bb:getWidth(), screen.bb:getHeight())
                     elseif screen.refreshPartial then
@@ -133,8 +123,6 @@ function Hook.augment(AnimationLab, PageCurl)
                     end
                     if screen.refreshWaitForLast then screen:refreshWaitForLast() end
 
-                    -- The animation replaces KOReader's queued refresh for this page.
-                    -- Keep its periodic full-refresh cadence unchanged.
                     if UIManager.refresh_count and UIManager.refresh_count > 0 then
                         UIManager.refresh_count = UIManager.refresh_count - 1
                     end
@@ -171,9 +159,7 @@ function Hook.augment(AnimationLab, PageCurl)
         nav.onGotoViewRel = function(nav_self, diff, no_page_turn)
             local step = tonumber(diff)
             local enabled = owner.auto_page_turn or owner._animationlab_force_once
-            local eligible = enabled
-                and no_page_turn ~= true
-                and (step == 1 or step == -1)
+            local eligible = enabled and no_page_turn ~= true and (step == 1 or step == -1)
 
             local before = nav_self.current_page
             if eligible then
@@ -184,9 +170,7 @@ function Hook.augment(AnimationLab, PageCurl)
             end
 
             local result = original(nav_self, diff, no_page_turn)
-
-            if eligible and before ~= nil and nav_self.current_page ~= nil
-                and before == nav_self.current_page then
+            if eligible and before ~= nil and nav_self.current_page ~= nil and before == nav_self.current_page then
                 owner._animationlab_pending_direction = nil
                 owner._animationlab_force_once = nil
             end
