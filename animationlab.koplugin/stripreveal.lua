@@ -2,9 +2,6 @@ local Device = require("device")
 local ffiUtil = require("ffi/util")
 
 local Screen = Device.screen
-local plugin_dir = debug.getinfo(1, "S").source:match("^@(.*/)") or "./"
-local Dither = dofile(plugin_dir .. "pagedither.lua")
-
 local StripReveal = {}
 
 local function nowSeconds()
@@ -18,21 +15,17 @@ local function sleepMs(ms)
     end
 end
 
-local function softwareMode(mode)
-    if mode == "sw_bayer" then return "ordered_binary" end
-    if mode == "sw_stochastic" then return "stochastic_binary" end
-    if mode == "sw_floyd_steinberg" then return "floyd_steinberg" end
-    if mode == "sw_atkinson" then return "atkinson" end
-    if mode == "threshold" then return "threshold" end
-end
-
 function StripReveal.preflight(config)
     config = config or {}
-    if not Screen.refreshUI then
-        return nil, "UI refresh is unavailable on this device."
-    end
-    if softwareMode(config.dither) and Screen.bb:getBpp() ~= 8 then
-        return nil, "Selected software dithering requires an 8bpp framebuffer."
+    local waveform = config.waveform or "auto"
+    if waveform == "auto" and not Screen.refreshUI then
+        return nil, "AUTO/UI refresh is unavailable on this device."
+    elseif waveform == "du" and not Screen.refreshFast then
+        return nil, "DU/Fast refresh is unavailable on this device."
+    elseif waveform == "a2" and not Screen.refreshA2 then
+        return nil, "A2 refresh is unavailable on this device."
+    elseif waveform ~= "auto" and waveform ~= "du" and waveform ~= "a2" then
+        return nil, "Unknown strip waveform: " .. tostring(waveform)
     end
     return true
 end
@@ -49,9 +42,17 @@ local function waitMarker(marker)
     return 0
 end
 
-local function submitStrip(x, y, w, h)
+local function submitStrip(waveform, x, y, w, h)
     local before = Screen.marker
-    Screen:refreshUI(x, y, w, h)
+    if waveform == "a2" then
+        Screen:refreshA2(x, y, w, h)
+    elseif waveform == "du" then
+        Screen:refreshFast(x, y, w, h)
+    else
+        -- This is the original KPW4 ZIP behavior. On Kindle Rex, KOReader's
+        -- UI refresh path uses the AUTO waveform.
+        Screen:refreshUI(x, y, w, h)
+    end
     if Screen.marker and Screen.marker ~= before then
         return Screen.marker
     end
@@ -68,18 +69,17 @@ function StripReveal.run(old, new, direction, config)
     local sw, sh = Screen.bb:getWidth(), Screen.bb:getHeight()
     local steps = 6
     local delay_ms = math.max(0, tonumber(config.delay_ms) or 40)
-    local scheduler = config.scheduler or "free"
-    local queue_depth = math.max(1, tonumber(config.queue_depth) or 4)
-    local dither_mode = softwareMode(config.dither)
+    local scheduler = config.scheduler == "fixed" and "fixed" or "free"
+    local waveform = config.waveform or "auto"
     local prev_dx = 0
-    local markers = {}
-    local fallback_outstanding = 0
     local last_marker
     local started = nowSeconds()
 
     Screen.bb:blitFrom(old, 0, 0, 0, 0, sw, sh)
 
     for i = 1, steps do
+        -- Fixed mode targets absolute strip times, so rendering/submit overhead
+        -- does not accumulate into progressively later frames.
         if scheduler == "fixed" and i > 1 and delay_ms > 0 then
             local deadline = started + ((i - 1) * delay_ms / 1000)
             local now = nowSeconds()
@@ -111,47 +111,18 @@ function StripReveal.run(old, new, direction, config)
         end
 
         if strip_w > 0 then
-            if dither_mode then
-                Dither.applyRect(Screen.bb, strip_x, 0, strip_w, sh, dither_mode)
-            end
-
-            local marker = submitStrip(strip_x, 0, strip_w, sh)
-            last_marker = marker or last_marker
-
-            if scheduler == "sync" then
-                waitMarker(marker)
-            elseif scheduler == "bounded" then
-                if marker then
-                    markers[#markers + 1] = marker
-                    if #markers > queue_depth then
-                        waitMarker(table.remove(markers, 1))
-                    end
-                else
-                    fallback_outstanding = fallback_outstanding + 1
-                    if fallback_outstanding >= queue_depth then
-                        if Screen.refreshWaitForLast then Screen:refreshWaitForLast() end
-                        fallback_outstanding = 0
-                    end
-                end
-            end
+            last_marker = submitStrip(waveform, strip_x, 0, strip_w, sh) or last_marker
         end
 
         prev_dx = dx
-        if scheduler ~= "fixed" then
+        if scheduler == "free" then
             sleepMs(delay_ms)
         end
     end
 
-    if scheduler == "bounded" then
-        for _, marker in ipairs(markers) do
-            waitMarker(marker)
-        end
-        if fallback_outstanding > 0 and Screen.refreshWaitForLast then
-            Screen:refreshWaitForLast()
-        end
-    elseif scheduler == "free" or scheduler == "fixed" then
-        waitMarker(last_marker)
-    end
+    -- Let the last strip update finish before the common hook submits the final
+    -- full-screen UI-quality settle refresh.
+    waitMarker(last_marker)
 
     Screen.bb:blitFrom(new, 0, 0, 0, 0, sw, sh)
     return {
@@ -159,7 +130,7 @@ function StripReveal.run(old, new, direction, config)
         frames = steps,
         delay_ms = delay_ms,
         scheduler = scheduler,
-        dither = config.dither or "gray",
+        waveform = waveform,
         elapsed = nowSeconds() - started,
     }
 end
