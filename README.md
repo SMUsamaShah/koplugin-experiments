@@ -22,11 +22,13 @@ See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, 
 
 Location: `animationlab.koplugin/`
 
-Version **0.3.2** turns the Motion Lab research into a real page-turn renderer that can automatically animate KOReader's normal one-page navigation.
+Version **0.4.0** combines the Motion Lab display experiments with the repaint architecture used by the proven KPW4 page-animation patch.
 
-**Animate normal page turns** is enabled by default. Standard page-zone taps, horizontal page-turn swipes, page-turn keys and other `GotoViewRel ±1` navigation are intercepted and rendered with the configured animation. Search/internal no-page-turn calls, multi-page jumps and unsupported configurations fall back to KOReader normally.
+KOReader now performs page navigation and destination-page rendering normally. Animation Lab snapshots the old framebuffer in `Screen:beforePaint()`, captures the completed destination framebuffer at the first physical refresh, animates between those two buffers, suppresses the now-redundant queued refreshes for that paint cycle, and finishes with one UI-quality settle refresh.
 
-The renderer uses a bowed edge, shaded page fold, highlight and cast shadow while refreshing only the moving strip. It can be configured with:
+This means standard taps, swipes and page-turn keys work through KOReader's normal code instead of being replaced by plugin navigation logic. A very small `onGotoViewRel` wrapper is retained only to record the visual direction for eligible one-page turns.
+
+The page-curl renderer can be configured with:
 
 - **DU or A2** waveform;
 - grayscale/no dither;
@@ -35,10 +37,8 @@ The renderer uses a bowed edge, shaded page fold, highlight and cast shadow whil
 - Free-running, Fixed clock, Bounded EPDC queue, or Synchronized scheduling;
 - target FPS, queue depth, frame count and frame delay.
 
-The Animation Lab menu is now intentionally small: automatic-animation toggle, page-turn settings, two manual test actions, and **update plugin** last. The old synthetic diagnostics, duplicate refresh/frame controls and legacy preview menus are hidden.
-
-The plugin also retains KOReader actions **Animated page turn: next page** and **Animated page turn: previous page** for explicit gesture or Quick Menu assignments.
+The Animation Lab menu is intentionally small: automatic-animation toggle, page-turn settings, two test actions, and **update plugin** last. The old synthetic diagnostics and duplicate legacy controls are no longer part of the runtime path.
 
 **update plugin** uses the shared `pluginupdater.lua` to update only `animationlab.koplugin` from this repository's `main` branch with staged replacement, integrity checks, backup/rollback and a restart prompt.
 
-See `animationlab.koplugin/README.md` for detailed settings and behavior.
+See `animationlab.koplugin/README.md` for detailed behavior and settings.
