@@ -2,6 +2,6 @@ local _ = require("gettext")
 return {
     name = "animationlab",
     fullname = _("E-Ink Animation Lab"),
-    version = "0.4.1",
-    description = _([[Automatically animate KOReader page turns after normal page rendering, with configurable curl geometry, A2/DU waveforms, dithering, scheduling, and self-update support.]]),
+    version = "0.4.2",
+    description = _([[Animate normal KOReader page turns with the exact KPW4 strip-reveal patch or a thinner configurable page curl.]]),
 }
