@@ -18,19 +18,20 @@ See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, 
 
 Location: `animationlab.koplugin/`
 
-Version **0.5.0** keeps only the KPW4 six-strip reveal from the uploaded working patch. The page-curl renderer and style selector have been removed completely.
+Version **0.6.0** keeps only the page-turn method that performed well on Kindle Paperwhite 4: the six-strip reveal derived from the uploaded KPW4 page-animation patch.
 
-KOReader still performs normal page navigation and destination-page rendering. Animation Lab captures the old and new framebuffers around that repaint, then reveals the destination in **6 equal full-height strips**, refreshing only the newly exposed strip at each step. A final full-screen `refreshUI()` settles the exact page.
+The animation keeps its fixed six-strip geometry and exposes only the variables that remain useful on-device:
 
-The strip reveal now supports:
+- **Waveform:** AUTO/UI (original), DU/Fast, or A2;
+- **Scheduling:** Free-running (original) or Fixed interval;
+- **Strip delay:** 0–100 ms, with 40 ms matching the original patch.
 
-- **Original grayscale / no dither**, SW Bayer, stochastic, Floyd-Steinberg, Atkinson, and plain threshold dithering;
-- **Free-running (ZIP original)**, Fixed interval, Bounded EPDC queue, and Synchronized scheduling;
-- configurable bounded-queue depth;
-- configurable strip delay from 0 to 100 ms.
+Software dithering, the page-curl renderer, bounded queue scheduling, synchronized scheduling, and queue-depth controls were removed after device testing showed worse animation performance.
 
-The original uploaded behavior remains the default: no dithering, free-running scheduling, **40 ms** strip delay, and six strips.
+The original known-good baseline remains **AUTO/UI + Free-running + 40 ms + 6 strips**.
 
-The menu remains intentionally small: automatic-animation toggle, page-turn settings, two test actions, and **update plugin** last.
+KOReader performs navigation and destination-page rendering normally. Animation Lab captures the old/new framebuffers around that repaint, reveals only the newly exposed strip on each step, suppresses the redundant queued refresh, and finishes with one full-screen UI settle.
+
+The menu remains intentionally small: automatic-animation toggle, waveform/scheduler/delay settings, two test actions, and **update plugin** last.
 
 See `animationlab.koplugin/README.md` for exact behavior and settings.
