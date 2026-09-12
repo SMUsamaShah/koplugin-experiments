@@ -1,57 +1,23 @@
 # E-Ink Animation Lab
 
-KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex.
+KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version **0.5.0** keeps only the strip-reveal animation from the working KPW4 patch and removes the page-curl renderer completely.
 
-Version 0.4.2 has two selectable animation styles and uses KOReader's normal page navigation/rendering path. The plugin snapshots the old framebuffer before paint, captures the completed destination framebuffer at the first physical refresh, runs the selected animation, suppresses the redundant queued refreshes for that paint cycle, and finishes with one full-screen UI-quality settle.
+## How it works
 
-## Animation styles
+For each ordinary one-page turn, KOReader performs navigation and renders the destination page normally. Animation Lab captures the old framebuffer before paint and the completed new framebuffer immediately before the physical refresh.
 
-Open **E-Ink Animation Lab → Page-turn animation settings → Animation style**.
+The transition is the proven KPW4 method:
 
-### KPW4 strip reveal (ZIP exact)
-
-This is the KPW4-modified animation from the uploaded `koreader-page-animation.zip`, reproduced directly inside the plugin:
-
-- 6 equal progress steps;
-- 40 ms delay between steps;
-- forward turns reveal the destination from right to left;
+- **6 equal full-height strips**;
+- forward turns reveal the new page from right to left;
 - backward turns reveal it from left to right;
-- only the newly revealed full-height strip is refreshed with `refreshUI()` on each step;
-- previously revealed pixels are left alone and persist through E-Ink bistability;
-- one final full-screen `refreshUI()` settles the destination page.
+- only the **newly revealed strip** is refreshed each step;
+- already revealed strips remain visible through E-Ink bistability;
+- one final full-screen `refreshUI()` settles the exact destination page.
 
-The strip mode deliberately ignores the curl waveform/dither/scheduler controls so it stays comparable to the proven KPW4 patch.
-
-**This is the default style in v0.4.2.**
-
-### Thin page curl
-
-The old thick curl renderer has been replaced by a substantially thinner and cheaper version:
-
-- curve bow reduced from about 3% to 1.2% of screen width;
-- fold width reduced from about 7% to 2.8%;
-- shadow reduced from about 4% to 1.4%;
-- fewer tonal slices are drawn for the fold/shadow;
-- larger horizontal bands reduce CPU drawing work;
-- only the moving dirty strip is refreshed.
-
-The thin curl retains the Motion Lab controls for DU/A2, software or Rex hardware dithering, free/fixed/bounded/synchronized scheduling, target FPS, queue depth, frame count and frame delay.
-
-## Normal page turns
-
-**Animate normal page turns** is enabled by default.
-
-KOReader still handles taps, swipes, keys, RTL/inverse reading order and document navigation normally. A small `onGotoViewRel` wrapper records only the direction for eligible one-page turns. The actual animation happens later in the framebuffer repaint lifecycle after KOReader has rendered the destination page.
-
-Internal `no_page_turn` calls and multi-page jumps are left alone.
-
-## Refresh interception
-
-KOReader's `UIManager` caches references to the public `Screen.refresh*` functions when it loads, so replacing those methods later from a plugin does not reliably intercept repaint. Animation Lab instead wraps the dynamically dispatched `refresh*Imp` methods, which are still reached immediately before the panel update.
+The strip count is deliberately fixed at 6 so configuration experiments do not change the known-good reveal geometry.
 
 ## Menu
-
-The menu contains only:
 
 1. **Animate normal page turns**
 2. **Page-turn animation settings**
@@ -59,6 +25,44 @@ The menu contains only:
 4. **Test animated previous page**
 5. **update plugin**
 
+## Page-turn animation settings
+
+### Dithering
+
+- **Original grayscale / no dither** — default; matches the uploaded KPW4 patch.
+- **SW Bayer**
+- **SW stochastic**
+- **SW Floyd-Steinberg**
+- **SW Atkinson**
+- **Plain B/W threshold**
+
+Software dithering is applied only to the newly revealed strip before that strip is refreshed. The final full-screen settle restores the exact grayscale destination page.
+
+### Scheduling
+
+- **Free-running (ZIP original)** — submit each strip refresh, then sleep for the configured delay. This is the default and reproduces the original scheduling behavior.
+- **Fixed interval** — treat Strip delay as the target interval between strip submissions; rendering time does not get added to the delay.
+- **Bounded EPDC queue** — allow a configurable number of outstanding refresh markers before waiting for the oldest.
+- **Synchronized** — wait for each strip refresh to complete before continuing.
+
+### Queue depth
+
+Used only by **Bounded EPDC queue**. Choices: 1, 2, 3, 4, 6, or 8. Default: **4**.
+
+### Strip delay
+
+Choices: **0, 5, 10, 20, 30, 40, 50, 60, 80, or 100 ms**.
+
+Default: **40 ms**, matching the uploaded KPW4 patch.
+
+## Defaults
+
+To reproduce the original known-good animation:
+
+- Dithering: **Original grayscale / no dither**
+- Scheduling: **Free-running (ZIP original)**
+- Strip delay: **40 ms**
+
 ## Self-update
 
-**update plugin** is the final menu entry and uses the same reusable `pluginupdater.lua` as E-Ink Motion Lab. It updates only `animationlab.koplugin` from the repository's `main` branch, verifies the Git revision and downloaded blobs, checks Lua syntax, stages the replacement, keeps a rollback backup, and offers to restart KOReader.
+**update plugin** remains the final menu entry and uses the shared `pluginupdater.lua` with staged replacement, integrity checks, backup/rollback, and a KOReader restart prompt.
