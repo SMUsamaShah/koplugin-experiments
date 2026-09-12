@@ -1,6 +1,6 @@
 # E-Ink Animation Lab
 
-Experimental KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version 0.3.0 applies the useful findings from E-Ink Motion / Grayscale Lab to real book pages.
+Experimental KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version 0.3.1 applies the useful findings from E-Ink Motion / Grayscale Lab to real book pages and adds the same reusable self-update mechanism used by Motion Lab.
 
 ## New page-turn renderer
 
@@ -59,12 +59,20 @@ Then compare the same turn with A2, Free-running and Fixed clock.
 
 ## Gesture / Quick Menu use
 
-Version 0.3.0 registers two KOReader actions:
+Animation Lab registers two KOReader actions:
 
 - **Animated page turn: next page**
 - **Animated page turn: previous page**
 
 Assign them to gestures or a Quick Menu to use the animation while reading without opening the plugin menu.
+
+## Self-update
+
+Version 0.3.1 includes the same reusable `pluginupdater.lua` used by E-Ink Motion Lab. **update plugin** is the final Animation Lab menu entry.
+
+It downloads only `animationlab.koplugin` from the `main` branch of `SMUsamaShah/koplugin-experiments`, pins the update to one Git revision, verifies HTTPS and Git blob hashes, checks Lua syntax, stages the complete replacement, keeps the previous plugin folder as `.update-backup`, restores it if the final swap fails, and then offers to restart KOReader.
+
+The updater file itself is deliberately reusable in other plugins: copy `pluginupdater.lua`, configure `repository`, `branch`, and `folder`, and append `updater:menuItem()` as the final menu item.
 
 ## Existing diagnostics
 
