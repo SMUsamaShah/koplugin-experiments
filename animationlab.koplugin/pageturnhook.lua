@@ -58,6 +58,7 @@ function Hook.augment(AnimationLab, PageCurl)
                 owner._animationlab_force_once = nil
                 state.armed = true
                 state.suppress = false
+                logger.info("AnimationLab: armed page-turn capture, direction", state.direction)
             end
             return state.original_beforePaint(screen, ...)
         end
@@ -116,6 +117,7 @@ function Hook.augment(AnimationLab, PageCurl)
                 state.armed = false
                 state.suppress = true
                 state.bypass = true
+                logger.info("AnimationLab: intercepted repaint via", name, "direction", direction)
 
                 local ok, result = pcall(PageCurl.run, old_bb, new_bb, direction, config)
                 if ok then
