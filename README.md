@@ -14,29 +14,10 @@ Diagnostics and run history are appended to `einkmotionlab.log` in KOReader's se
 
 See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, updater instructions, and warnings about direct Rex / pause-resume experiments.
 
-## E-Ink Animation Lab
+## Page-turn animation plugin moved
 
-Location: `animationlab.koplugin/`
+The former `animationlab.koplugin` page-turn experiment has graduated into its own repository:
 
-Version **0.7.0** keeps the fast six-step reveal derived from the uploaded KPW4 page-animation patch and adds page-like reveal geometry without restoring the slower curl renderer.
+`SMUsamaShah/page-turn-animation.koplugin`
 
-Available reveal shapes:
-
-- **Straight vertical** — original KPW4 strip reveal;
-- **Diagonal — bottom first** — bottom leads, top lags, then both converge at the end;
-- **Curved bottom flip** — lower bands accelerate early with a curved edge, then slow so the page finishes aligned.
-
-All three shapes still use only **six physical E-Ink updates** per turn. The shaped modes calculate the edge in horizontal framebuffer bands and submit one bounding-rectangle update per temporal step.
-
-Useful on-device controls are:
-
-- **Waveform:** AUTO/UI, DU/Fast, or A2;
-- **Scheduling:** Free-running or Fixed interval;
-- **Strip delay:** 0–100 ms, with 40 ms matching the original patch;
-- **Full clean refresh afterwards:** optional `refreshFull()` cleanup for aggressive modes such as A2. When disabled, the normal final `refreshUI()` / AUTO settle remains.
-
-The original known-good baseline remains **Straight + AUTO/UI + Free-running + 40 ms** with full clean refresh disabled.
-
-KOReader performs navigation and destination-page rendering normally. Animation Lab captures the old/new framebuffers around that repaint, performs the reveal, suppresses the redundant queued refresh, and restores the exact final page.
-
-See `animationlab.koplugin/README.md` for exact behavior and settings.
+Further page-turn animation work should happen there. The plugin keeps its existing `animationlab` internal ID/settings keys for compatibility with existing installs.
