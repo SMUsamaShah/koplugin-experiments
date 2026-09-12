@@ -7,6 +7,7 @@ function Menu.augment(AnimationLab, radioItem)
     local old_init = AnimationLab.init
     function AnimationLab:init()
         old_init(self)
+        self.page_style = G_reader_settings:readSetting("animationlab_page_style") or "strip"
         self.page_waveform = G_reader_settings:readSetting("animationlab_page_waveform") or "du"
         self.page_dither = G_reader_settings:readSetting("animationlab_page_dither") or "gray"
         self.page_scheduler = G_reader_settings:readSetting("animationlab_page_scheduler") or "bounded"
@@ -31,6 +32,7 @@ function Menu.augment(AnimationLab, radioItem)
 
     function AnimationLab:getPageTurnConfig()
         return {
+            style = self.page_style,
             waveform = self.page_waveform,
             dither = self.page_dither,
             scheduler = self.page_scheduler,
@@ -70,9 +72,10 @@ function Menu.augment(AnimationLab, radioItem)
             function() self:setPageSetting(field, value) end)
     end
 
-    function AnimationLab:pageTurnSettingsItem()
+    function AnimationLab:thinCurlSettingsItem()
         return {
-            text = _("Page-turn animation settings"),
+            text = _("Thin curl settings"),
+            enabled_func = function() return self.page_style == "thin_curl" end,
             sub_item_table = {
                 {
                     text = _("Waveform"),
@@ -147,6 +150,22 @@ function Menu.augment(AnimationLab, radioItem)
                         settingRadio(self, "12 ms", "page_delay_ms", 12),
                     },
                 },
+            },
+        }
+    end
+
+    function AnimationLab:pageTurnSettingsItem()
+        return {
+            text = _("Page-turn animation settings"),
+            sub_item_table = {
+                {
+                    text = _("Animation style"),
+                    sub_item_table = {
+                        settingRadio(self, _("KPW4 strip reveal (ZIP exact)"), "page_style", "strip"),
+                        settingRadio(self, _("Thin page curl"), "page_style", "thin_curl"),
+                    },
+                },
+                self:thinCurlSettingsItem(),
             },
         }
     end
