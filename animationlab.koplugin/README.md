@@ -1,25 +1,30 @@
 # E-Ink Animation Lab
 
-Experimental KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version 0.3.2 applies the useful findings from E-Ink Motion / Grayscale Lab directly to normal reading.
+KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version 0.4.0 uses the same repaint lifecycle architecture as the working KPW4 page-animation patch, while keeping the Motion Lab waveform, dithering and scheduling experiments.
 
-## Normal page turns are animated automatically
+## How page turns work
 
 **Animate normal page turns** is enabled by default.
 
-When enabled, ordinary single-page navigation through KOReader uses the configured page-curl animation:
+Animation Lab no longer takes over page navigation. KOReader handles taps, swipes, keys, RTL/inverse reading order and document navigation normally.
 
-- tap forward/backward page zones;
-- horizontal page-turn swipes;
-- page-turn keys / `GotoViewRel ±1`;
-- other normal single-step page turns routed through KOReader's page navigation.
+For an ordinary one-page turn the plugin now does this:
 
-Internal calls that explicitly request no page turn, multi-page jumps, and unsupported animation configurations fall back to KOReader's original navigation handler.
+1. `Screen:beforePaint()` snapshots the old framebuffer.
+2. KOReader renders the destination page normally into `Screen.bb`.
+3. At the first physical refresh, Animation Lab copies that completed destination framebuffer.
+4. The configured curl animation runs from the old framebuffer to the already-rendered new framebuffer.
+5. KOReader's remaining queued physical refreshes for that paint cycle are suppressed because the animation has already displayed the destination.
+6. One final `refreshUI()` settles the exact destination page into crisp grayscale.
+7. The KOReader partial-refresh counter is rolled back, matching the proven KPW4 patch behavior so the animation does not shift the periodic full-refresh cadence.
 
-You can disable this behavior at any time with **Animate normal page turns**.
+The plugin only wraps `onGotoViewRel` to record the direction of eligible `+1/-1` page turns; it immediately calls KOReader's original handler. It does not replace the navigation operation itself.
 
-## Clean menu
+Internal `no_page_turn` calls and multi-page jumps are left alone.
 
-The Animation Lab menu now contains only:
+## Menu
+
+The menu contains only:
 
 1. **Animate normal page turns**
 2. **Page-turn animation settings**
@@ -27,11 +32,11 @@ The Animation Lab menu now contains only:
 4. **Test animated previous page**
 5. **update plugin**
 
-The old Synthetic diagnostics, Refresh mode, legacy Frames / Frame delay controls, and Legacy previews are no longer exposed in the menu. Their old implementation remains internal for now because the real-page capture path still reuses parts of the original experiment.
+The old synthetic diagnostics, duplicate refresh/frame controls and legacy preview implementation have been removed from the runtime path.
 
 ## Page-turn animation settings
 
-The renderer uses a bowed moving page edge, a shaded paper fold, a highlight and a cast shadow. Only the moving region is refreshed. Software dithering is applied to the fold/shadow region so normal book text outside it remains untouched.
+The renderer uses a bowed moving page edge, shaded fold, highlight and cast shadow while refreshing only the region around the moving fold.
 
 ### Waveform
 
@@ -50,41 +55,37 @@ The renderer uses a bowed moving page edge, a shaded paper fold, a highlight and
 - **Rex HW Floyd-Steinberg**
 - **Rex HW Atkinson**
 
-The three Rex HW modes use the same direct `MXCFB_SEND_UPDATE_REX` path explored by Motion Lab and require a compatible Kindle Rex device.
+The Rex HW modes use the direct `MXCFB_SEND_UPDATE_REX` path explored by E-Ink Motion Lab and require a compatible Kindle Rex device.
 
 ### Scheduling
 
-- **Free-running** — submit frames as soon as they are rendered, with the selected small frame delay.
-- **Fixed clock / skip late frames** — use absolute frame deadlines and skip obsolete logical frames if rendering/submission falls behind.
+- **Free-running** — submit frames as soon as they are ready.
+- **Fixed clock / skip late frames** — use absolute deadlines and skip obsolete logical frames when late.
 - **Bounded EPDC queue** — cap outstanding update markers at the selected queue depth.
-- **Synchronized** — wait for each frame to complete before submitting the next.
+- **Synchronized** — wait for each frame to finish before submitting the next.
 
-There are separate controls for target FPS, queue depth, animation frame count and the free/bounded frame delay.
+There are separate controls for target FPS, queue depth, frame count and free/bounded frame delay.
 
-A reasonable first PW4 comparison is:
+The default starting point is:
 
 - DU
-- SW Bayer
+- Grayscale / no dither
 - Bounded EPDC queue
 - Queue depth 4
 - 12 frames
-- 4 ms frame delay
-
-Then compare the same turn with A2, Free-running and Fixed clock.
+- 4 ms delay
 
 ## Gesture / Quick Menu actions
 
-Animation Lab still registers:
+The plugin also registers:
 
 - **Animated page turn: next page**
 - **Animated page turn: previous page**
 
-These remain useful for explicit gesture or Quick Menu assignments, but they are no longer required for ordinary page turns when automatic animation is enabled.
+These simply request an ordinary KOReader page turn; the same automatic repaint hook performs the animation.
 
 ## Self-update
 
-**update plugin** is the final Animation Lab menu entry and uses the same reusable `pluginupdater.lua` as E-Ink Motion Lab.
+**update plugin** is the final menu entry and uses the same reusable `pluginupdater.lua` as E-Ink Motion Lab.
 
-It downloads only `animationlab.koplugin` from the `main` branch of `SMUsamaShah/koplugin-experiments`, pins the update to one Git revision, verifies HTTPS and Git blob hashes, checks Lua syntax, stages the complete replacement, keeps the previous plugin folder as `.update-backup`, restores it if the final swap fails, and then offers to restart KOReader.
-
-The updater file itself is deliberately reusable in other plugins: copy `pluginupdater.lua`, configure `repository`, `branch`, and `folder`, and append `updater:menuItem()` as the final menu item.
+It updates only `animationlab.koplugin` from the `main` branch of `SMUsamaShah/koplugin-experiments`, verifies the Git revision and downloaded blobs, checks Lua syntax, stages the replacement, keeps a backup for rollback, and offers to restart KOReader.
