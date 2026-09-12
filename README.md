@@ -22,7 +22,7 @@ See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, 
 
 Location: `animationlab.koplugin/`
 
-Version **0.3.0** turns the Motion Lab research into a real page-turn renderer for the current book.
+Version **0.3.1** turns the Motion Lab research into a real page-turn renderer for the current book and adds the same reusable self-update mechanism used by Motion Lab.
 
 The new renderer uses a bowed edge, shaded page fold, highlight and cast shadow while refreshing only the moving strip. It can be configured with:
 
@@ -37,6 +37,8 @@ Open **E-Ink Animation Lab → Page-turn animation settings** to change these. U
 
 It also registers KOReader actions **Animated page turn: next page** and **Animated page turn: previous page**, so they can be assigned to gestures or a Quick Menu for normal reading.
 
+**update plugin**, the final Animation Lab menu item, uses the shared `pluginupdater.lua` to update only `animationlab.koplugin` from this repository's `main` branch with staged replacement, integrity checks, backup/rollback and a restart prompt.
+
 The earlier Plain wipe / Moving shadow / Curved edge previews remain in the plugin as legacy diagnostics, along with the moving-box and refresh comparison tests.
 
-See `animationlab.koplugin/README.md` for detailed settings and a suggested starting configuration.
+See `animationlab.koplugin/README.md` for detailed settings, updater behavior and a suggested starting configuration.
