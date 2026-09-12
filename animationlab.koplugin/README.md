@@ -1,6 +1,6 @@
 # E-Ink Animation Lab
 
-KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version 0.4.0 uses the same repaint lifecycle architecture as the working KPW4 page-animation patch, while keeping the Motion Lab waveform, dithering and scheduling experiments.
+KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version 0.4.1 uses the same repaint lifecycle architecture as the working KPW4 page-animation patch, while keeping the Motion Lab waveform, dithering and scheduling experiments.
 
 ## How page turns work
 
@@ -21,6 +21,10 @@ For an ordinary one-page turn the plugin now does this:
 The plugin only wraps `onGotoViewRel` to record the direction of eligible `+1/-1` page turns; it immediately calls KOReader's original handler. It does not replace the navigation operation itself.
 
 Internal `no_page_turn` calls and multi-page jumps are left alone.
+
+### Refresh interception detail
+
+KOReader's `UIManager` caches references to the public `Screen.refresh*` functions when `uimanager.lua` loads. That means a plugin loaded later cannot reliably intercept repaint by replacing `Screen.refreshUI`, `Screen.refreshFast`, and similar methods. Version 0.4.1 fixes this by wrapping the dynamically-dispatched `refresh*Imp` implementation methods instead. The cached public refresh functions still call those implementation methods at the exact point before the panel update, so the animation can replace the queued page refresh without patching KOReader's `_repaint()` source.
 
 ## Menu
 
