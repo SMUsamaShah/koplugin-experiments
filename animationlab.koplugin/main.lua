@@ -16,6 +16,7 @@ end
 function AnimationLab:turnPageForTest(direction)
     UIManager:nextTick(function()
         if self.ui then
+            self._animationlab_force_once = true
             self.ui:handleEvent(Event:new("GotoViewRel", direction))
         end
     end)
