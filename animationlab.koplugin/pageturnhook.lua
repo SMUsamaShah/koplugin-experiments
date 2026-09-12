@@ -42,12 +42,14 @@ function Hook.augment(AnimationLab, PageCurl)
         Screen.beforePaint = function(screen, ...)
             local first_paint = not screen.painting
             local owner = state.owner
-            if first_paint and not state.bypass and owner and owner.auto_page_turn
+            local enabled = owner and (owner.auto_page_turn or owner._animationlab_force_once)
+            if first_paint and not state.bypass and enabled
                 and owner._animationlab_pending_direction then
                 freeBuffer(state.old_bb)
                 state.old_bb = screen.bb:copy()
                 state.direction = owner._animationlab_pending_direction
                 owner._animationlab_pending_direction = nil
+                owner._animationlab_force_once = nil
                 state.armed = true
                 state.suppress = false
             end
@@ -81,7 +83,7 @@ function Hook.augment(AnimationLab, PageCurl)
                     end
 
                     local owner = state.owner
-                    if not owner or not owner.auto_page_turn then
+                    if not owner then
                         state.armed = false
                         freeBuffer(state.old_bb)
                         state.old_bb = nil
@@ -154,7 +156,8 @@ function Hook.augment(AnimationLab, PageCurl)
 
         nav.onGotoViewRel = function(nav_self, diff, no_page_turn)
             local step = tonumber(diff)
-            local eligible = owner.auto_page_turn
+            local enabled = owner.auto_page_turn or owner._animationlab_force_once
+            local eligible = enabled
                 and no_page_turn ~= true
                 and (step == 1 or step == -1)
 
@@ -171,6 +174,7 @@ function Hook.augment(AnimationLab, PageCurl)
             if eligible and before ~= nil and nav_self.current_page ~= nil
                 and before == nav_self.current_page then
                 owner._animationlab_pending_direction = nil
+                owner._animationlab_force_once = nil
             end
             return result
         end
@@ -193,6 +197,7 @@ function Hook.augment(AnimationLab, PageCurl)
     local old_close = AnimationLab.onCloseDocument
     function AnimationLab:onCloseDocument(...)
         self._animationlab_pending_direction = nil
+        self._animationlab_force_once = nil
         if state.owner == self then
             state.owner = nil
             freeBuffer(state.old_bb)
