@@ -22,9 +22,11 @@ See `einkmotionlab.koplugin/README.md` for the complete test matrix, GIF modes, 
 
 Location: `animationlab.koplugin/`
 
-Version **0.3.1** turns the Motion Lab research into a real page-turn renderer for the current book and adds the same reusable self-update mechanism used by Motion Lab.
+Version **0.3.2** turns the Motion Lab research into a real page-turn renderer that can automatically animate KOReader's normal one-page navigation.
 
-The new renderer uses a bowed edge, shaded page fold, highlight and cast shadow while refreshing only the moving strip. It can be configured with:
+**Animate normal page turns** is enabled by default. Standard page-zone taps, horizontal page-turn swipes, page-turn keys and other `GotoViewRel ±1` navigation are intercepted and rendered with the configured animation. Search/internal no-page-turn calls, multi-page jumps and unsupported configurations fall back to KOReader normally.
+
+The renderer uses a bowed edge, shaded page fold, highlight and cast shadow while refreshing only the moving strip. It can be configured with:
 
 - **DU or A2** waveform;
 - grayscale/no dither;
@@ -33,12 +35,10 @@ The new renderer uses a bowed edge, shaded page fold, highlight and cast shadow 
 - Free-running, Fixed clock, Bounded EPDC queue, or Synchronized scheduling;
 - target FPS, queue depth, frame count and frame delay.
 
-Open **E-Ink Animation Lab → Page-turn animation settings** to change these. Use **Animated next page** or **Animated previous page** to test the selected combination.
+The Animation Lab menu is now intentionally small: automatic-animation toggle, page-turn settings, two manual test actions, and **update plugin** last. The old synthetic diagnostics, duplicate refresh/frame controls and legacy preview menus are hidden.
 
-It also registers KOReader actions **Animated page turn: next page** and **Animated page turn: previous page**, so they can be assigned to gestures or a Quick Menu for normal reading.
+The plugin also retains KOReader actions **Animated page turn: next page** and **Animated page turn: previous page** for explicit gesture or Quick Menu assignments.
 
-**update plugin**, the final Animation Lab menu item, uses the shared `pluginupdater.lua` to update only `animationlab.koplugin` from this repository's `main` branch with staged replacement, integrity checks, backup/rollback and a restart prompt.
+**update plugin** uses the shared `pluginupdater.lua` to update only `animationlab.koplugin` from this repository's `main` branch with staged replacement, integrity checks, backup/rollback and a restart prompt.
 
-The earlier Plain wipe / Moving shadow / Curved edge previews remain in the plugin as legacy diagnostics, along with the moving-box and refresh comparison tests.
-
-See `animationlab.koplugin/README.md` for detailed settings, updater behavior and a suggested starting configuration.
+See `animationlab.koplugin/README.md` for detailed settings and behavior.
