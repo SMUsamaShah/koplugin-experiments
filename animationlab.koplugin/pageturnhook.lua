@@ -29,7 +29,7 @@ local function restoreDestination(screen, new_bb)
     screen.bb:blitFrom(new_bb, 0, 0, 0, 0, w, h)
 end
 
-function Hook.augment(AnimationLab, Renderers)
+function Hook.augment(AnimationLab, Renderer)
     local state = Screen._animationlab_page_turn_hook
     if not state then
         state = {
@@ -56,8 +56,7 @@ function Hook.augment(AnimationLab, Renderers)
                 owner._animationlab_force_once = nil
                 state.armed = true
                 state.suppress = false
-                logger.info("AnimationLab: armed page-turn capture, direction", state.direction,
-                    "style", owner.page_style)
+                logger.info("AnimationLab: armed KPW4 strip reveal, direction", state.direction)
             end
             return state.original_beforePaint(screen, ...)
         end
@@ -89,8 +88,7 @@ function Hook.augment(AnimationLab, Renderers)
                 end
 
                 local config = owner:getPageTurnConfig()
-                local renderer = Renderers[config.style] or Renderers.strip
-                local ready, why = renderer.preflight(config)
+                local ready, why = Renderer.preflight(config)
                 if not ready then
                     logger.warn("AnimationLab: page-turn preflight failed:", why)
                     state.armed = false
@@ -109,13 +107,14 @@ function Hook.augment(AnimationLab, Renderers)
                 state.suppress = true
                 state.bypass = true
                 logger.info("AnimationLab: intercepted repaint via", name,
-                    "direction", direction, "style", config.style)
+                    "direction", direction, "scheduler", config.scheduler,
+                    "dither", config.dither, "delay_ms", config.delay_ms)
 
-                local ok, result = pcall(renderer.run, old_bb, new_bb, direction, config)
+                local ok, result = pcall(Renderer.run, old_bb, new_bb, direction, config)
                 if ok then
                     restoreDestination(screen, new_bb)
-                    -- Both styles end with the exact destination in Screen.bb.
-                    -- The uploaded KPW4 patch does one final UI-quality settle.
+                    -- Match the uploaded KPW4 patch: finish with one exact,
+                    -- full-screen UI-quality refresh after the six strip updates.
                     if screen.refreshUI then
                         screen:refreshUI(0, 0, screen.bb:getWidth(), screen.bb:getHeight())
                     elseif screen.refreshPartial then
