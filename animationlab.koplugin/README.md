@@ -1,30 +1,53 @@
 # E-Ink Animation Lab
 
-KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex. Version 0.4.1 uses the same repaint lifecycle architecture as the working KPW4 page-animation patch, while keeping the Motion Lab waveform, dithering and scheduling experiments.
+KOReader page-turn animation plugin for Kindle Paperwhite 4 / Rex.
 
-## How page turns work
+Version 0.4.2 has two selectable animation styles and uses KOReader's normal page navigation/rendering path. The plugin snapshots the old framebuffer before paint, captures the completed destination framebuffer at the first physical refresh, runs the selected animation, suppresses the redundant queued refreshes for that paint cycle, and finishes with one full-screen UI-quality settle.
+
+## Animation styles
+
+Open **E-Ink Animation Lab → Page-turn animation settings → Animation style**.
+
+### KPW4 strip reveal (ZIP exact)
+
+This is the KPW4-modified animation from the uploaded `koreader-page-animation.zip`, reproduced directly inside the plugin:
+
+- 6 equal progress steps;
+- 40 ms delay between steps;
+- forward turns reveal the destination from right to left;
+- backward turns reveal it from left to right;
+- only the newly revealed full-height strip is refreshed with `refreshUI()` on each step;
+- previously revealed pixels are left alone and persist through E-Ink bistability;
+- one final full-screen `refreshUI()` settles the destination page.
+
+The strip mode deliberately ignores the curl waveform/dither/scheduler controls so it stays comparable to the proven KPW4 patch.
+
+**This is the default style in v0.4.2.**
+
+### Thin page curl
+
+The old thick curl renderer has been replaced by a substantially thinner and cheaper version:
+
+- curve bow reduced from about 3% to 1.2% of screen width;
+- fold width reduced from about 7% to 2.8%;
+- shadow reduced from about 4% to 1.4%;
+- fewer tonal slices are drawn for the fold/shadow;
+- larger horizontal bands reduce CPU drawing work;
+- only the moving dirty strip is refreshed.
+
+The thin curl retains the Motion Lab controls for DU/A2, software or Rex hardware dithering, free/fixed/bounded/synchronized scheduling, target FPS, queue depth, frame count and frame delay.
+
+## Normal page turns
 
 **Animate normal page turns** is enabled by default.
 
-Animation Lab no longer takes over page navigation. KOReader handles taps, swipes, keys, RTL/inverse reading order and document navigation normally.
-
-For an ordinary one-page turn the plugin now does this:
-
-1. `Screen:beforePaint()` snapshots the old framebuffer.
-2. KOReader renders the destination page normally into `Screen.bb`.
-3. At the first physical refresh, Animation Lab copies that completed destination framebuffer.
-4. The configured curl animation runs from the old framebuffer to the already-rendered new framebuffer.
-5. KOReader's remaining queued physical refreshes for that paint cycle are suppressed because the animation has already displayed the destination.
-6. One final `refreshUI()` settles the exact destination page into crisp grayscale.
-7. The KOReader partial-refresh counter is rolled back, matching the proven KPW4 patch behavior so the animation does not shift the periodic full-refresh cadence.
-
-The plugin only wraps `onGotoViewRel` to record the direction of eligible `+1/-1` page turns; it immediately calls KOReader's original handler. It does not replace the navigation operation itself.
+KOReader still handles taps, swipes, keys, RTL/inverse reading order and document navigation normally. A small `onGotoViewRel` wrapper records only the direction for eligible one-page turns. The actual animation happens later in the framebuffer repaint lifecycle after KOReader has rendered the destination page.
 
 Internal `no_page_turn` calls and multi-page jumps are left alone.
 
-### Refresh interception detail
+## Refresh interception
 
-KOReader's `UIManager` caches references to the public `Screen.refresh*` functions when `uimanager.lua` loads. That means a plugin loaded later cannot reliably intercept repaint by replacing `Screen.refreshUI`, `Screen.refreshFast`, and similar methods. Version 0.4.1 fixes this by wrapping the dynamically-dispatched `refresh*Imp` implementation methods instead. The cached public refresh functions still call those implementation methods at the exact point before the panel update, so the animation can replace the queued page refresh without patching KOReader's `_repaint()` source.
+KOReader's `UIManager` caches references to the public `Screen.refresh*` functions when it loads, so replacing those methods later from a plugin does not reliably intercept repaint. Animation Lab instead wraps the dynamically dispatched `refresh*Imp` methods, which are still reached immediately before the panel update.
 
 ## Menu
 
@@ -36,60 +59,6 @@ The menu contains only:
 4. **Test animated previous page**
 5. **update plugin**
 
-The old synthetic diagnostics, duplicate refresh/frame controls and legacy preview implementation have been removed from the runtime path.
-
-## Page-turn animation settings
-
-The renderer uses a bowed moving page edge, shaded fold, highlight and cast shadow while refreshing only the region around the moving fold.
-
-### Waveform
-
-- **DU / Fast**
-- **A2**
-
-### Dithering
-
-- **Grayscale / no dither**
-- **SW Bayer**
-- **SW stochastic**
-- **SW Floyd-Steinberg**
-- **SW Atkinson**
-- **Plain B/W threshold**
-- **Rex HW ordered**
-- **Rex HW Floyd-Steinberg**
-- **Rex HW Atkinson**
-
-The Rex HW modes use the direct `MXCFB_SEND_UPDATE_REX` path explored by E-Ink Motion Lab and require a compatible Kindle Rex device.
-
-### Scheduling
-
-- **Free-running** — submit frames as soon as they are ready.
-- **Fixed clock / skip late frames** — use absolute deadlines and skip obsolete logical frames when late.
-- **Bounded EPDC queue** — cap outstanding update markers at the selected queue depth.
-- **Synchronized** — wait for each frame to finish before submitting the next.
-
-There are separate controls for target FPS, queue depth, frame count and free/bounded frame delay.
-
-The default starting point is:
-
-- DU
-- Grayscale / no dither
-- Bounded EPDC queue
-- Queue depth 4
-- 12 frames
-- 4 ms delay
-
-## Gesture / Quick Menu actions
-
-The plugin also registers:
-
-- **Animated page turn: next page**
-- **Animated page turn: previous page**
-
-These simply request an ordinary KOReader page turn; the same automatic repaint hook performs the animation.
-
 ## Self-update
 
-**update plugin** is the final menu entry and uses the same reusable `pluginupdater.lua` as E-Ink Motion Lab.
-
-It updates only `animationlab.koplugin` from the `main` branch of `SMUsamaShah/koplugin-experiments`, verifies the Git revision and downloaded blobs, checks Lua syntax, stages the replacement, keeps a backup for rollback, and offers to restart KOReader.
+**update plugin** is the final menu entry and uses the same reusable `pluginupdater.lua` as E-Ink Motion Lab. It updates only `animationlab.koplugin` from the repository's `main` branch, verifies the Git revision and downloaded blobs, checks Lua syntax, stages the replacement, keeps a rollback backup, and offers to restart KOReader.
