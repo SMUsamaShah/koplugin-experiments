@@ -7,9 +7,13 @@ function Menu.augment(AnimationLab, radioItem)
     local old_init = AnimationLab.init
     function AnimationLab:init()
         old_init(self)
-        self.page_dither = G_reader_settings:readSetting("animationlab_page_dither") or "gray"
+        -- New key on purpose: do not inherit the old curl-era page_waveform
+        -- setting, which could otherwise silently force DU after upgrading.
+        self.strip_waveform = G_reader_settings:readSetting("animationlab_strip_waveform") or "auto"
         self.page_scheduler = G_reader_settings:readSetting("animationlab_page_scheduler") or "free"
-        self.page_queue_depth = tonumber(G_reader_settings:readSetting("animationlab_page_queue_depth")) or 4
+        if self.page_scheduler ~= "free" and self.page_scheduler ~= "fixed" then
+            self.page_scheduler = "free"
+        end
         self.page_delay_ms = tonumber(G_reader_settings:readSetting("animationlab_page_delay_ms")) or 40
         local saved_auto = G_reader_settings:readSetting("animationlab_auto_page_turn")
         self.auto_page_turn = saved_auto == nil and true or saved_auto == true
@@ -28,9 +32,8 @@ function Menu.augment(AnimationLab, radioItem)
 
     function AnimationLab:getPageTurnConfig()
         return {
-            dither = self.page_dither,
+            waveform = self.strip_waveform,
             scheduler = self.page_scheduler,
-            queue_depth = self.page_queue_depth,
             delay_ms = self.page_delay_ms,
         }
     end
@@ -69,14 +72,11 @@ function Menu.augment(AnimationLab, radioItem)
             text = _("Page-turn animation settings"),
             sub_item_table = {
                 {
-                    text = _("Dithering"),
+                    text = _("Waveform"),
                     sub_item_table = {
-                        settingRadio(self, _("Original grayscale / no dither"), "page_dither", "gray"),
-                        settingRadio(self, _("SW Bayer"), "page_dither", "sw_bayer"),
-                        settingRadio(self, _("SW stochastic"), "page_dither", "sw_stochastic"),
-                        settingRadio(self, _("SW Floyd-Steinberg"), "page_dither", "sw_floyd_steinberg"),
-                        settingRadio(self, _("SW Atkinson"), "page_dither", "sw_atkinson"),
-                        settingRadio(self, _("Plain B/W threshold"), "page_dither", "threshold"),
+                        settingRadio(self, _("AUTO / UI (ZIP original)"), "strip_waveform", "auto"),
+                        settingRadio(self, _("DU / Fast"), "strip_waveform", "du"),
+                        settingRadio(self, _("A2"), "strip_waveform", "a2"),
                     },
                 },
                 {
@@ -84,20 +84,6 @@ function Menu.augment(AnimationLab, radioItem)
                     sub_item_table = {
                         settingRadio(self, _("Free-running (ZIP original)"), "page_scheduler", "free"),
                         settingRadio(self, _("Fixed interval"), "page_scheduler", "fixed"),
-                        settingRadio(self, _("Bounded EPDC queue"), "page_scheduler", "bounded"),
-                        settingRadio(self, _("Synchronized"), "page_scheduler", "sync"),
-                    },
-                },
-                {
-                    text = _("Queue depth (bounded)"),
-                    enabled_func = function() return self.page_scheduler == "bounded" end,
-                    sub_item_table = {
-                        settingRadio(self, "1", "page_queue_depth", 1),
-                        settingRadio(self, "2", "page_queue_depth", 2),
-                        settingRadio(self, "3", "page_queue_depth", 3),
-                        settingRadio(self, "4", "page_queue_depth", 4),
-                        settingRadio(self, "6", "page_queue_depth", 6),
-                        settingRadio(self, "8", "page_queue_depth", 8),
                     },
                 },
                 {
