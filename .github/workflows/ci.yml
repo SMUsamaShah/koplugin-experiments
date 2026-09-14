@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install package tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 zip unzip
+      - name: Validate Lua
+        run: |
+          for file in einkmotionlab.koplugin/*.lua; do
+            luac5.1 -p "$file"
+          done
+      - name: Verify release package
+        run: |
+          metadata_version=$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+            einkmotionlab.koplugin/_meta.lua)
+          test -n "$metadata_version"
+          test "$metadata_version" = "$(tr -d '\r\n' < VERSION)"
+          sh scripts/package.sh
+          unzip -t dist/einkmotionlab.koplugin.zip
+          diff -u <(find einkmotionlab.koplugin -type f | sort) \
+            <(unzip -Z1 dist/einkmotionlab.koplugin.zip | sed '/\/$/d' | sort)
